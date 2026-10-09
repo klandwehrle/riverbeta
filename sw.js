@@ -1,6 +1,6 @@
 /* River Beta service worker.
    Bump CACHE_VERSION whenever you change any app file so phones pick up the new version. */
-const CACHE_VERSION = "river-beta-v2";
+const CACHE_VERSION = "river-beta-v3";
 const APP_FILES = [
   "./",
   "./index.html",
