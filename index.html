@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>River Beta</title>
+<meta name="description" content="Log river levels and trips, even with no service.">
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1F4E57" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#15292D" media="(prefers-color-scheme: dark)">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+
+<!-- iPhone home-screen app -->
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="River Beta">
+
+<style>
+:root {
+  --bg: #E6ECEA;
+  --surface: #F6F9F8;
+  --ink: #17282C;
+  --muted: #566B66;
+  --line: #C6D2CF;
+  --river: #1F4E57;
+  --water: #2C6F7A;
+  --foam: #9FDCD8;
+  --pfd: #F4C02E;
+  --pfd-ink: #17282C;
+  --alert: #A8321F;
+  --focus: #2C6F7A;
+  --head: #1F4E57;
+  --head-ink: #F6F9F8;
+  --cond: "Avenir Next Condensed", "Roboto Condensed", "sans-serif-condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0E1F22;
+    --surface: #15292D;
+    --ink: #E4EDEB;
+    --muted: #93A9A4;
+    --line: #2A4247;
+    --river: #9FDCD8;
+    --head: #15292D;
+    --head-ink: #E4EDEB;
+    --alert: #F08A7A;
+    --focus: #9FDCD8;
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.5 var(--body);
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+[hidden] { display: none !important; }
+
+/* ---------- Top bar ---------- */
+.topbar {
+  position: sticky; top: 0; z-index: 5;
+  background: var(--head); color: var(--head-ink);
+  padding: calc(env(safe-area-inset-top, 0px) + 10px) 16px 10px;
+}
+.topbar-inner {
+  max-width: 560px; margin: 0 auto;
+  display: flex; align-items: center; gap: 10px;
+}
+.topbar h1 {
+  margin: 0; flex: 1;
+  font: 700 1.5rem/1.1 var(--cond); font-stretch: condensed; letter-spacing: 0.01em;
+}
+.status {
+  border: 1.5px solid rgba(255,255,255,0.35); background: transparent; color: inherit;
+  border-radius: 999px; padding: 5px 12px; font-size: 0.875rem; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
+}
+.status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--foam); }
+.status.waiting { background: var(--pfd); color: var(--pfd-ink); border-color: var(--pfd); }
+.status.waiting .dot { background: var(--pfd-ink); }
+.status.offline .dot, .status.idle .dot { background: transparent; border: 1.5px solid currentColor; }
+.status.busy .dot { animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.25; } }
+.icon-btn {
+  background: transparent; border: 0; color: inherit; cursor: pointer;
+  width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center;
+}
+.icon-btn svg { width: 22px; height: 22px; }
+
+/* ---------- Layout ---------- */
+main {
+  max-width: 560px; margin: 0 auto;
+  padding: 18px 16px calc(env(safe-area-inset-bottom, 0px) + 96px);
+}
+.banner {
+  background: var(--surface); border-left: 6px solid var(--pfd);
+  padding: 12px 14px; border-radius: 8px; margin-bottom: 18px; font-size: 0.9375rem;
+}
+.banner code { font-size: 0.875rem; }
+
+/* ---------- Form ---------- */
+.field { margin-bottom: 16px; }
+.field > label, .label {
+  display: block; font-weight: 600; font-size: 0.9375rem; margin-bottom: 6px;
+}
+.label .opt, label .opt { font-weight: 400; color: var(--muted); }
+input[type="text"], input[type="date"], input[type="password"], select, textarea {
+  width: 100%; min-height: 50px;
+  font-size: 1.0625rem; padding: 11px 14px;
+  background: var(--surface); border: 1.5px solid var(--line); border-radius: 10px;
+}
+textarea { min-height: 96px; resize: vertical; }
+input[type="date"] { -webkit-appearance: none; appearance: none; }
+.select { position: relative; }
+.select select { -webkit-appearance: none; appearance: none; padding-right: 40px; }
+.select::after {
+  content: ""; position: absolute; right: 16px; top: 50%;
+  width: 9px; height: 9px; margin-top: -7px;
+  border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg); pointer-events: none;
+}
+.new-input { margin-top: 8px; }
+.hint { margin: 8px 0 0; font-size: 0.9375rem; color: var(--muted); }
+.hint button {
+  background: none; border: 0; padding: 0; color: var(--river);
+  font-weight: 600; text-decoration: underline; cursor: pointer;
+}
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 360px) { .row { grid-template-columns: 1fr; } }
+[aria-invalid="true"] { border-color: var(--alert) !important; }
+
+/* The staff gauge: the level is the heart of river beta */
+.gauge {
+  display: grid; grid-template-columns: 30px 1fr;
+  background: var(--surface); border: 1.5px solid var(--line); border-radius: 12px; overflow: hidden;
+}
+.staff {
+  background-color: var(--pfd);
+  background-image:
+    repeating-linear-gradient(to bottom, #17282C 0 3px, transparent 3px 48px),
+    repeating-linear-gradient(to bottom, #17282C 0 3px, transparent 3px 12px);
+  background-size: 78% 100%, 44% 100%;
+  background-repeat: no-repeat;
+  background-position: 4px 10px, 4px 10px;
+}
+.gauge-main { padding: 6px 12px 12px 14px; min-width: 0; }
+#level {
+  width: 100%; border: 0; background: transparent; padding: 0;
+  font: 700 3.25rem/1.15 var(--cond); font-stretch: condensed;
+  font-variant-numeric: tabular-nums; letter-spacing: -0.01em;
+}
+#level::placeholder { color: var(--line); }
+#level:focus-visible { outline: none; }
+.gauge:focus-within { border-color: var(--focus); box-shadow: 0 0 0 2px var(--focus); }
+.units { display: flex; gap: 6px; flex-wrap: wrap; }
+.units button {
+  border: 1.5px solid var(--line); background: transparent; border-radius: 8px;
+  padding: 5px 12px; font-size: 0.9375rem; cursor: pointer; min-height: 36px;
+}
+.units button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.beta-line { margin: 8px 2px 0; font-size: 0.9375rem; color: var(--muted); min-height: 1.5em; }
+.beta-line strong { color: var(--ink); }
+
+.primary {
+  width: 100%; min-height: 56px; margin-top: 6px;
+  background: var(--pfd); color: var(--pfd-ink); border: 0; border-radius: 12px; cursor: pointer;
+  font: 700 1.3125rem/1 var(--cond); font-stretch: condensed; letter-spacing: 0.01em;
+}
+.primary:active { transform: translateY(1px); }
+.secondary {
+  min-height: 46px; padding: 0 16px; border-radius: 10px; cursor: pointer;
+  background: transparent; border: 1.5px solid var(--line); font-weight: 600;
+}
+
+/* ---------- History ---------- */
+.search { margin-bottom: 6px; }
+.count { color: var(--muted); font-size: 0.875rem; margin: 0 2px 10px; }
+.trips {
+  list-style: none; margin: 0; padding: 0;
+  background: var(--surface); border-radius: 12px; border: 1.5px solid var(--line); overflow: hidden;
+}
+.trip {
+  display: grid; grid-template-columns: 82px 1fr; gap: 12px;
+  padding: 14px 14px 14px 0; border-top: 1px solid var(--line);
+}
+.trip:first-child { border-top: 0; }
+.trip-level {
+  border-left: 6px solid var(--pfd); padding-left: 10px;
+  display: flex; flex-direction: column; justify-content: flex-start;
+}
+.trip-level .num {
+  font: 700 1.75rem/1.05 var(--cond); font-stretch: condensed; font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.trip-level .num.text { font-size: 1.0625rem; line-height: 1.25; }
+.trip-level .unit { font-size: 0.8125rem; color: var(--muted); }
+.trip h3 { margin: 0; font: 700 1.1875rem/1.2 var(--cond); font-stretch: condensed; }
+.trip .section { margin: 1px 0 0; }
+.trip .meta { margin: 4px 0 0; font-size: 0.875rem; color: var(--muted); }
+.trip .notes { margin: 6px 0 0; font-size: 0.9375rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.trip.pending { background: color-mix(in srgb, var(--pfd) 14%, var(--surface)); }
+.tag {
+  display: inline-block; margin-top: 6px; font-size: 0.8125rem; font-weight: 600;
+  background: var(--pfd); color: var(--pfd-ink); padding: 2px 8px; border-radius: 6px;
+}
+.empty { padding: 28px 18px; text-align: center; color: var(--muted); }
+.more { display: block; margin: 14px auto 0; }
+
+/* ---------- Bottom tabs ---------- */
+.tabs {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
+  background: var(--surface); border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.tabs-inner { max-width: 560px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; }
+.tabs button {
+  background: none; border: 0; cursor: pointer; min-height: 60px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  font-size: 0.8125rem; color: var(--muted); font-weight: 600;
+}
+.tabs svg { width: 24px; height: 24px; }
+.tabs button[aria-selected="true"] { color: var(--ink); }
+.tabs button[aria-selected="true"] svg { color: var(--water); }
+@media (prefers-color-scheme: dark) { .tabs button[aria-selected="true"] svg { color: var(--foam); } }
+
+/* ---------- Toast ---------- */
+.toast {
+  position: fixed; left: 16px; right: 16px; z-index: 10;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 76px);
+  max-width: 528px; margin: 0 auto;
+  background: var(--ink); color: var(--bg); border-radius: 12px;
+  padding: 13px 16px; font-size: 0.9375rem;
+  transform: translateY(12px); opacity: 0; pointer-events: none;
+  transition: opacity 0.18s, transform 0.18s;
+}
+.toast.show { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  .toast { transition: none; }
+  .status.busy .dot { animation: none; }
+}
+
+/* ---------- Settings dialog ---------- */
+dialog {
+  width: min(520px, calc(100% - 24px)); max-height: calc(100% - 40px);
+  border: 0; border-radius: 16px; padding: 0;
+  background: var(--surface); color: var(--ink);
+}
+dialog::backdrop { background: rgba(10, 25, 28, 0.55); }
+.dialog-body { padding: 20px 20px 22px; }
+dialog h2 { margin: 0 0 4px; font: 700 1.5rem/1.15 var(--cond); font-stretch: condensed; }
+dialog .lede { margin: 0 0 18px; color: var(--muted); }
+.sync-info { margin: 4px 0 16px; padding: 12px 14px; border-radius: 10px; background: var(--bg); font-size: 0.9375rem; }
+.sync-info p { margin: 0; }
+.sync-info p + p { margin-top: 4px; }
+.dialog-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+.dialog-actions .primary { flex: 1 1 100%; margin-top: 0; }
+.install { margin-top: 14px; font-size: 0.9375rem; color: var(--muted); }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <h1>River Beta</h1>
+    <button class="status idle" id="statusBtn" type="button" aria-live="polite">
+      <span class="dot" aria-hidden="true"></span><span id="statusText">Starting</span>
+    </button>
+    <button class="icon-btn" id="settingsBtn" type="button" aria-label="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<main>
+  <div class="banner" id="setupBanner" hidden>
+    This copy of River Beta isn't connected to your sheet yet. Paste your Apps Script <code>/exec</code> URL into <code>config.js</code>.
+  </div>
+
+  <!-- Log trip -->
+  <section id="view-log" aria-labelledby="tab-log">
+    <form id="tripForm" novalidate>
+      <div class="field">
+        <label for="date">Date</label>
+        <input type="date" id="date" required>
+      </div>
+
+      <div class="field">
+        <label for="river">River</label>
+        <div class="select"><select id="river"></select></div>
+        <input type="text" id="riverNew" class="new-input" placeholder="New river name" autocomplete="off" autocapitalize="words" hidden>
+        <p class="hint" id="riverHint" hidden></p>
+      </div>
+
+      <div class="field">
+        <label for="section">Section <span class="opt">(optional)</span></label>
+        <div class="select"><select id="section"></select></div>
+        <input type="text" id="sectionNew" class="new-input" placeholder="New section name" autocomplete="off" autocapitalize="words" hidden>
+        <p class="hint" id="sectionHint" hidden></p>
+      </div>
+
+      <div class="field">
+        <label for="level">Level <span class="opt">(optional)</span></label>
+        <div class="gauge">
+          <div class="staff" aria-hidden="true"></div>
+          <div class="gauge-main">
+            <input type="text" id="level" inputmode="decimal" placeholder="0.0" autocomplete="off" enterkeyhint="next">
+            <div class="units" role="group" aria-label="Level unit">
+              <button type="button" data-unit="ft">ft</button>
+              <button type="button" data-unit="cfs">cfs</button>
+              <button type="button" data-unit="">No unit</button>
+            </div>
+          </div>
+        </div>
+        <p class="beta-line" id="betaLine" aria-live="polite"></p>
+      </div>
+
+      <div class="field">
+        <label for="boat">Boat <span class="opt">(optional)</span></label>
+        <div class="select"><select id="boat"></select></div>
+        <input type="text" id="boatNew" class="new-input" placeholder="New boat name" autocomplete="off" autocapitalize="words" hidden>
+      </div>
+
+      <div class="field">
+        <label for="notes">Notes <span class="opt">(optional)</span></label>
+        <textarea id="notes" placeholder="Wood, portages, who you paddled with…"></textarea>
+      </div>
+
+      <button type="submit" class="primary">Save trip</button>
+    </form>
+  </section>
+
+  <!-- History -->
+  <section id="view-history" aria-labelledby="tab-history" hidden>
+    <div class="field search">
+      <label for="search" class="visually-hidden">Search trips</label>
+      <input type="text" id="search" placeholder="Search rivers, sections, boats, notes" autocomplete="off" enterkeyhint="search">
+    </div>
+    <p class="count" id="tripCount"></p>
+    <ul class="trips" id="tripList"></ul>
+    <button type="button" class="secondary more" id="moreBtn" hidden>Show more trips</button>
+  </section>
+</main>
+
+<nav class="tabs" role="tablist" aria-label="Sections">
+  <div class="tabs-inner">
+    <button type="button" role="tab" id="tab-log" aria-controls="view-log" aria-selected="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      Log trip
+    </button>
+    <button type="button" role="tab" id="tab-history" aria-controls="view-history" aria-selected="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 9c3-2 6 2 9 0s6-2 9 0M3 15c3-2 6 2 9 0s6-2 9 0"/></svg>
+      History
+    </button>
+  </div>
+</nav>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<dialog id="settings" aria-labelledby="settingsTitle">
+  <form method="dialog" class="dialog-body" id="settingsForm">
+    <h2 id="settingsTitle">Settings</h2>
+    <p class="lede" id="settingsLede">Your name is added to every trip you log.</p>
+
+    <div class="field">
+      <label for="name">Your name</label>
+      <input type="text" id="name" autocomplete="name" autocapitalize="words">
+    </div>
+    <div class="field">
+      <label for="passcode">Crew passcode <span class="opt">(only if your sheet uses one)</span></label>
+      <input type="password" id="passcode" autocomplete="off">
+    </div>
+
+    <div class="sync-info">
+      <p id="infoWaiting"></p>
+      <p id="infoLast"></p>
+    </div>
+
+    <div class="dialog-actions">
+      <button type="submit" class="primary" value="save">Save settings</button>
+      <button type="button" class="secondary" id="syncBtn">Sync now</button>
+      <button type="button" class="secondary" id="installBtn" hidden>Install app</button>
+    </div>
+    <p class="install" id="installHelp" hidden></p>
+  </form>
+</dialog>
+
+<script src="config.js"></script>
+<script src="shared.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  /* ---------- State ---------- */
+  var CONFIG = window.RIVER_BETA_CONFIG || {};
+  var CONNECTED = /^https:\/\/script\.google\.com\/.+\/exec/.test(CONFIG.scriptUrl || "");
+  var NEW = "__new__";
+
+  var state = {
+    data: { rivers: [], sections: {}, boats: [], trips: [] },
+    outbox: [],
+    settings: {},
+    lastSync: null,
+    syncing: false,
+    offline: false,
+    unit: "ft",
+    shown: 100,
+    installPrompt: null
+  };
+
+  var $ = function (id) { return document.getElementById(id); };
+  var el = {
+    form: $("tripForm"), date: $("date"),
+    river: $("river"), riverNew: $("riverNew"), riverHint: $("riverHint"),
+    section: $("section"), sectionNew: $("sectionNew"), sectionHint: $("sectionHint"),
+    level: $("level"), betaLine: $("betaLine"),
+    boat: $("boat"), boatNew: $("boatNew"), notes: $("notes"),
+    search: $("search"), tripList: $("tripList"), tripCount: $("tripCount"), moreBtn: $("moreBtn"),
+    statusBtn: $("statusBtn"), statusText: $("statusText"),
+    settings: $("settings"), settingsForm: $("settingsForm"), name: $("name"), passcode: $("passcode"),
+    settingsTitle: $("settingsTitle"), settingsLede: $("settingsLede"),
+    infoWaiting: $("infoWaiting"), infoLast: $("infoLast"),
+    syncBtn: $("syncBtn"), installBtn: $("installBtn"), installHelp: $("installHelp"),
+    toast: $("toast")
+  };
+
+  /* ---------- Helpers ---------- */
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function lower(s) { return String(s || "").trim().toLowerCase(); }
+  function byName(a, b) { return a.toLowerCase().localeCompare(b.toLowerCase()); }
+  function today() { return new Date().toLocaleDateString("en-CA"); } // yyyy-mm-dd, local time
+  function uuid() {
+    if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+    return Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+  }
+  function niceDate(d) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d || "");
+    if (!m) return d || "";
+    return new Date(+m[1], +m[2] - 1, +m[3]).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  }
+  function timeAgo(iso) {
+    if (!iso) return "never";
+    var mins = Math.round((Date.now() - new Date(iso)) / 60000);
+    if (mins < 1) return "just now";
+    if (mins < 60) return mins + " min ago";
+    var hrs = Math.round(mins / 60);
+    if (hrs < 24) return hrs + (hrs === 1 ? " hour ago" : " hours ago");
+    return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
+  function levenshtein(a, b) {
+    if (!a.length) return b.length;
+    if (!b.length) return a.length;
+    var prev = [], i, j;
+    for (j = 0; j <= b.length; j++) prev[j] = j;
+    for (i = 1; i <= a.length; i++) {
+      var cur = [i];
+      for (j = 1; j <= b.length; j++) {
+        cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      }
+      prev = cur;
+    }
+    return prev[b.length];
+  }
+  function splitLevel(level) {
+    var m = /^(-?\d+(?:[.,]\d+)?)\s*(.*)$/.exec(String(level || "").trim());
+    if (m) return { num: m[1], unit: m[2], text: false };
+    return { num: level || "—", unit: "", text: !!level };
+  }
+
+  var toastTimer;
+  function toast(msg, ms) {
+    el.toast.textContent = msg;
+    el.toast.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.toast.classList.remove("show"); }, ms || 3200);
+  }
+
+  /* ---------- Lists (server data + anything added offline) ---------- */
+  function lists() {
+    var sections = {};
+    var riverKeys = {};
+    function addRiver(r) {
+      var k = lower(r);
+      if (!k) return null;
+      if (!riverKeys[k]) { riverKeys[k] = r.trim(); sections[riverKeys[k]] = []; }
+      return riverKeys[k];
+    }
+    function addSection(r, s) {
+      var name = addRiver(r);
+      if (!name || !lower(s)) return;
+      var have = sections[name].some(function (x) { return lower(x) === lower(s); });
+      if (!have) sections[name].push(s.trim());
+    }
+    state.data.rivers.forEach(function (r) {
+      addRiver(r);
+      (state.data.sections[r] || []).forEach(function (s) { addSection(r, s); });
+    });
+    var boats = state.data.boats.slice();
+    state.outbox.forEach(function (t) {
+      addSection(t.river, t.section);
+      addRiver(t.river);
+      if (t.boat && !boats.some(function (b) { return lower(b) === lower(t.boat); })) boats.push(t.boat);
+    });
+    var rivers = Object.keys(sections).sort(byName);
+    rivers.forEach(function (r) { sections[r].sort(byName); });
+    return { rivers: rivers, sections: sections, boats: boats.sort(byName) };
+  }
+
+  function allTrips() {
+    var pendingIds = {};
+    var pending = state.outbox.map(function (t) {
+      pendingIds[t.id] = true;
+      return Object.assign({ pending: true }, t);
+    });
+    var synced = state.data.trips.filter(function (t) { return !pendingIds[t.id]; });
+    return pending.concat(synced).sort(function (a, b) {
+      if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+      return (a.createdAt || a.loggedAt || "") < (b.createdAt || b.loggedAt || "") ? 1 : -1;
+    });
+  }
+
+  /* ---------- Dropdowns ---------- */
+  function fillSelect(select, items, placeholder, addLabel, keep) {
+    var html = '<option value="">' + esc(placeholder) + "</option>";
+    items.forEach(function (it) { html += '<option value="' + esc(it) + '">' + esc(it) + "</option>"; });
+    html += '<option value="' + NEW + '">' + esc(addLabel) + "</option>";
+    select.innerHTML = html;
+    if (keep && (items.indexOf(keep) !== -1 || keep === NEW)) select.value = keep;
+  }
+
+  function chosen(select, input) {
+    return select.value === NEW ? input.value.trim() : select.value;
+  }
+
+  function renderPickers() {
+    var L = lists();
+    var river = el.river.value;
+    fillSelect(el.river, L.rivers, "Choose a river", "+ Add a new river", river);
+    renderSections();
+    var boat = el.boat.value || state.settings.lastBoat || "";
+    fillSelect(el.boat, L.boats, "Choose a boat", "+ Add a new boat", boat);
+    toggleNew(el.boat, el.boatNew);
+  }
+
+  function renderSections() {
+    var L = lists();
+    var river = el.river.value;
+    var keep = el.section.value;
+    var items = river && river !== NEW ? (L.sections[river] || []) : [];
+    fillSelect(el.section, items, items.length ? "Choose a section" : "No section", "+ Add a new section", keep);
+    toggleNew(el.section, el.sectionNew);
+  }
+
+  function toggleNew(select, input) {
+    var isNew = select.value === NEW;
+    input.hidden = !isNew;
+    if (!isNew) input.value = "";
+  }
+
+  // "Did you mean…?" so the sheet doesn't fill up with near-duplicate names
+  function similarCheck(value, existing, hintEl, onPick) {
+    var v = lower(value);
+    hintEl.hidden = true;
+    if (v.length < 3) return;
+    var exact = existing.filter(function (x) { return lower(x) === v; })[0];
+    var close = exact || existing.filter(function (x) { return levenshtein(lower(x), v) <= 2; })[0];
+    if (!close) return;
+    hintEl.innerHTML = (exact ? esc(close) + " is already on the list. " : "Did you mean " + esc(close) + "? ") +
+      '<button type="button">Use ' + esc(close) + "</button>";
+    hintEl.hidden = false;
+    hintEl.querySelector("button").onclick = function () { hintEl.hidden = true; onPick(close); };
+  }
+
+  function renderBeta() {
+    var river = chosen(el.river, el.riverNew);
+    var section = chosen(el.section, el.sectionNew);
+    if (!river) { el.betaLine.textContent = ""; return; }
+    var matches = allTrips().filter(function (t) {
+      return lower(t.river) === lower(river) && (!section || lower(t.section) === lower(section));
+    });
+    var place = section ? "this run" : "this river";
+    if (!matches.length) { el.betaLine.textContent = "First trip logged on " + place + "."; return; }
+    var withLevel = matches.filter(function (t) { return t.level; })[0];
+    var last = withLevel || matches[0];
+    var who = last.paddler ? " by " + esc(last.paddler) : "";
+    var lvl = withLevel ? "Last logged at <strong>" + esc(withLevel.level) + "</strong> on " : "Last paddled ";
+    el.betaLine.innerHTML = lvl + esc(niceDate(last.date)) + who + ". " +
+      matches.length + (matches.length === 1 ? " trip" : " trips") + " on " + place + ".";
+  }
+
+  function setUnit(u) {
+    state.unit = u;
+    document.querySelectorAll(".units button").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.dataset.unit === u));
+    });
+  }
+
+  /* ---------- History ---------- */
+  function renderHistory() {
+    var q = lower(el.search.value);
+    var trips = allTrips().filter(function (t) {
+      if (!q) return true;
+      return [t.river, t.section, t.boat, t.notes, t.paddler, t.level, niceDate(t.date)].join(" ").toLowerCase().indexOf(q) !== -1;
+    });
+
+    if (!trips.length) {
+      el.tripList.innerHTML = '<li class="empty">' + (q
+        ? "No trips match “" + esc(el.search.value.trim()) + "”."
+        : "No trips yet. Log your first one on the Log trip tab.") + "</li>";
+      el.tripCount.textContent = "";
+      el.moreBtn.hidden = true;
+      return;
+    }
+
+    el.tripCount.textContent = trips.length + (trips.length === 1 ? " trip" : " trips");
+    el.tripList.innerHTML = trips.slice(0, state.shown).map(function (t) {
+      var lv = splitLevel(t.level);
+      var meta = esc(niceDate(t.date));
+      if (t.boat) meta += " in " + esc(t.boat);
+      if (t.paddler) meta += ", " + esc(t.paddler);
+      return '<li class="trip' + (t.pending ? " pending" : "") + '">' +
+        '<div class="trip-level"><span class="num' + (lv.text ? " text" : "") + '">' + esc(lv.num) + "</span>" +
+        (lv.unit ? '<span class="unit">' + esc(lv.unit) + "</span>" : "") + "</div>" +
+        "<div><h3>" + esc(t.river) + "</h3>" +
+        (t.section ? '<p class="section">' + esc(t.section) + "</p>" : "") +
+        '<p class="meta">' + meta + "</p>" +
+        (t.notes ? '<p class="notes">' + esc(t.notes) + "</p>" : "") +
+        (t.pending ? '<span class="tag">Waiting to upload</span>' : "") +
+        "</div></li>";
+    }).join("");
+    el.moreBtn.hidden = trips.length <= state.shown;
+  }
+
+  /* ---------- Sync status ---------- */
+  function renderStatus() {
+    var n = state.outbox.length;
+    var cls = "idle", text = "Up to date";
+    if (!CONNECTED) { text = "Not connected"; }
+    else if (state.syncing) { cls = "busy"; text = "Syncing"; }
+    else if (n) { cls = "waiting"; text = n + " waiting to upload"; }
+    else if (state.offline) { cls = "offline"; text = "Offline"; }
+    else if (state.lastSync) { cls = "ok"; }
+    el.statusBtn.className = "status " + cls;
+    el.statusText.textContent = text;
+
+    el.infoWaiting.textContent = n
+      ? n + (n === 1 ? " trip is" : " trips are") + " saved on this phone, waiting to upload."
+      : "Every trip on this phone has been uploaded.";
+    el.infoLast.textContent = "Last synced with the sheet: " + timeAgo(state.lastSync) + ".";
+  }
+
+  function renderAll() {
+    renderPickers();
+    renderBeta();
+    renderHistory();
+    renderStatus();
+  }
+
+  /* ---------- Talking to the sheet ---------- */
+  async function refresh() {
+    var key = encodeURIComponent(state.settings.passcode || "");
+    var t = RB.withTimeout(20000);
+    try {
+      var res = await fetch(CONFIG.scriptUrl + "?action=bootstrap&key=" + key, { signal: t.signal });
+      var json = await RB.readJson(res);
+      if (!json.ok) throw new Error(json.error || "Couldn't load the sheet.");
+      state.data = { rivers: json.rivers || [], sections: json.sections || {}, boats: json.boats || [], trips: json.trips || [] };
+      state.lastSync = new Date().toISOString();
+      await RB.db.put("kv", state.data, "data");
+      await RB.db.put("kv", state.lastSync, "lastSync");
+    } finally {
+      t.done();
+    }
+  }
+
+  function isNetworkError(err) {
+    return err && (err.name === "AbortError" || err.name === "TypeError" || /network|fetch|load failed/i.test(err.message));
+  }
+
+  async function syncNow(manual) {
+    if (!CONNECTED || state.syncing) return;
+    state.syncing = true;
+    renderStatus();
+    try {
+      var result = await RB.uploadOutbox();
+      state.outbox = await RB.db.all("outbox");
+      if (result.sent) toast(result.sent === 1 ? "Trip uploaded to the sheet." : result.sent + " trips uploaded to the sheet.");
+      if (result.rejected.length) toast(result.rejected.length + " trip(s) were missing a river and weren't uploaded.", 5000);
+      await refresh();
+      state.offline = false;
+      if (manual && !result.sent) toast("Up to date with the sheet.");
+    } catch (err) {
+      if (isNetworkError(err)) {
+        state.offline = true;
+        if (manual) toast(state.outbox.length ? "No service right now. Trips stay saved here until it's back." : "No service right now.", 4000);
+      } else {
+        toast(err.message, 5000);
+      }
+    } finally {
+      state.syncing = false;
+      state.outbox = await RB.db.all("outbox");
+      renderAll();
+    }
+  }
+
+  function askForBackgroundSync() {
+    if (!("serviceWorker" in navigator)) return;
+    navigator.serviceWorker.ready.then(function (reg) {
+      if (reg.sync) return reg.sync.register("rb-outbox");
+    }).catch(function () {});
+  }
+
+  /* ---------- Saving a trip ---------- */
+  async function saveTrip(e) {
+    e.preventDefault();
+    var river = chosen(el.river, el.riverNew);
+    var riverField = el.river.value === NEW ? el.riverNew : el.river;
+    [el.date, el.river, el.riverNew].forEach(function (f) { f.removeAttribute("aria-invalid"); });
+
+    if (!el.date.value) { el.date.setAttribute("aria-invalid", "true"); el.date.focus(); toast("Pick the date of the trip."); return; }
+    if (!river) { riverField.setAttribute("aria-invalid", "true"); riverField.focus(); toast("Choose a river, or add a new one."); return; }
+
+    var lvl = el.level.value.trim();
+    if (lvl && state.unit && /^-?\d+(?:[.,]\d+)?$/.test(lvl)) lvl += " " + state.unit;
+    var boat = chosen(el.boat, el.boatNew);
+
+    var trip = {
+      id: uuid(),
+      date: el.date.value,
+      river: river,
+      section: chosen(el.section, el.sectionNew),
+      level: lvl,
+      boat: boat,
+      notes: el.notes.value.trim(),
+      paddler: state.settings.name || "",
+      createdAt: new Date().toISOString()
+    };
+
+    await RB.db.put("outbox", trip);
+    state.outbox = await RB.db.all("outbox");
+    state.settings.lastBoat = boat;
+    state.settings.unit = state.unit;
+    await RB.db.put("kv", state.settings, "settings");
+
+    // Keep the date and boat (you'll often log several runs in a day), clear the rest
+    el.river.value = "";
+    el.riverNew.value = ""; el.riverNew.hidden = true; el.riverHint.hidden = true;
+    el.section.value = "";
+    el.sectionNew.value = ""; el.sectionHint.hidden = true;
+    el.level.value = "";
+    el.notes.value = "";
+    el.boat.value = "";
+    el.boatNew.value = "";
+    renderAll();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+
+    toast("Trip saved on this phone.");
+    askForBackgroundSync();
+    if (CONNECTED) {
+      await syncNow(false);
+      if (state.outbox.some(function (t) { return t.id === trip.id; })) {
+        toast("Trip saved on this phone. It will upload when you have service.", 4500);
+      }
+    }
+  }
+
+  /* ---------- Settings ---------- */
+  function openSettings(firstRun) {
+    el.name.value = state.settings.name || "";
+    el.passcode.value = state.settings.passcode || "";
+    el.settingsTitle.textContent = firstRun ? "Welcome to River Beta" : "Settings";
+    el.settingsLede.textContent = firstRun
+      ? "Add your name so your crew knows who logged each trip. You can change it here anytime."
+      : "Your name is added to every trip you log.";
+    renderStatus();
+    renderInstall();
+    if (el.settings.showModal) el.settings.showModal(); else el.settings.setAttribute("open", "");
+  }
+
+  async function saveSettings() {
+    var passChanged = (state.settings.passcode || "") !== el.passcode.value.trim();
+    state.settings.name = el.name.value.trim();
+    state.settings.passcode = el.passcode.value.trim();
+    state.settings.welcomed = true;
+    await RB.db.put("kv", state.settings, "settings");
+    toast("Settings saved.");
+    if (passChanged) syncNow(true);
+  }
+
+  function renderInstall() {
+    var standalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+    var ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    el.installBtn.hidden = !state.installPrompt || standalone;
+    el.installHelp.hidden = standalone || !ios;
+    el.installHelp.textContent = "To install on iPhone: open this page in Safari, tap the Share button, then Add to Home Screen. Installing keeps your saved trips safe.";
+  }
+
+  /* ---------- Tabs ---------- */
+  function showTab(name) {
+    ["log", "history"].forEach(function (n) {
+      $("view-" + n).hidden = n !== name;
+      $("tab-" + n).setAttribute("aria-selected", String(n === name));
+    });
+    if (name === "history") renderHistory();
+    window.scrollTo(0, 0);
+  }
+
+  /* ---------- Events ---------- */
+  function wire() {
+    el.form.addEventListener("submit", saveTrip);
+
+    el.river.addEventListener("change", function () {
+      toggleNew(el.river, el.riverNew);
+      el.riverHint.hidden = true;
+      el.section.value = "";
+      renderSections();
+      if (el.river.value === NEW) {
+        fillSelect(el.section, [], "No section", "+ Add a new section", "");
+        el.riverNew.focus();
+      }
+      renderBeta();
+    });
+    el.riverNew.addEventListener("input", function () {
+      similarCheck(el.riverNew.value, lists().rivers, el.riverHint, function (name) {
+        el.river.value = name; toggleNew(el.river, el.riverNew); renderSections(); renderBeta();
+      });
+      renderBeta();
+    });
+
+    el.section.addEventListener("change", function () {
+      toggleNew(el.section, el.sectionNew);
+      el.sectionHint.hidden = true;
+      if (el.section.value === NEW) el.sectionNew.focus();
+      renderBeta();
+    });
+    el.sectionNew.addEventListener("input", function () {
+      var river = chosen(el.river, el.riverNew);
+      var existing = lists().sections[el.river.value] || [];
+      if (river) similarCheck(el.sectionNew.value, existing, el.sectionHint, function (name) {
+        el.section.value = name; toggleNew(el.section, el.sectionNew); renderBeta();
+      });
+      renderBeta();
+    });
+
+    el.boat.addEventListener("change", function () {
+      toggleNew(el.boat, el.boatNew);
+      if (el.boat.value === NEW) el.boatNew.focus();
+    });
+
+    document.querySelectorAll(".units button").forEach(function (b) {
+      b.addEventListener("click", function () { setUnit(b.dataset.unit); });
+    });
+
+    el.search.addEventListener("input", function () { state.shown = 100; renderHistory(); });
+    el.moreBtn.addEventListener("click", function () { state.shown += 100; renderHistory(); });
+
+    $("tab-log").addEventListener("click", function () { showTab("log"); });
+    $("tab-history").addEventListener("click", function () { showTab("history"); });
+
+    el.statusBtn.addEventListener("click", function () {
+      if (!CONNECTED) { toast("Add your Apps Script URL to config.js to connect."); return; }
+      syncNow(true);
+    });
+    $("settingsBtn").addEventListener("click", function () { openSettings(false); });
+    el.settingsForm.addEventListener("submit", function () { saveSettings(); });
+    el.settings.addEventListener("close", function () {
+      if (state.settings.welcomed) return;
+      state.settings.welcomed = true;
+      RB.db.put("kv", state.settings, "settings");
+    });
+    el.syncBtn.addEventListener("click", function () { syncNow(true); });
+
+    window.addEventListener("beforeinstallprompt", function (e) {
+      e.preventDefault();
+      state.installPrompt = e;
+      renderInstall();
+    });
+    el.installBtn.addEventListener("click", function () {
+      if (!state.installPrompt) return;
+      state.installPrompt.prompt();
+      state.installPrompt = null;
+      renderInstall();
+    });
+
+    // Upload whenever service might be back
+    window.addEventListener("online", function () { syncNow(false); });
+    document.addEventListener("visibilitychange", function () { if (!document.hidden) syncNow(false); });
+    setInterval(function () { if (!document.hidden && state.outbox.length) syncNow(false); }, 60000);
+    setInterval(renderStatus, 60000);
+
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.addEventListener("message", async function (e) {
+        if (e.data && e.data.type === "synced") {
+          state.outbox = await RB.db.all("outbox");
+          syncNow(false);
+        }
+      });
+    }
+  }
+
+  /* ---------- Start ---------- */
+  async function init() {
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("sw.js").catch(function (err) { console.warn("Service worker:", err); });
+    }
+    if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {});
+
+    $("setupBanner").hidden = CONNECTED;
+    if (CONNECTED) await RB.db.put("kv", { scriptUrl: CONFIG.scriptUrl }, "config");
+
+    state.settings = (await RB.db.get("kv", "settings")) || {};
+    state.data = (await RB.db.get("kv", "data")) || state.data;
+    state.outbox = await RB.db.all("outbox");
+    state.lastSync = (await RB.db.get("kv", "lastSync")) || null;
+
+    el.date.value = today();
+    setUnit(state.settings.unit !== undefined ? state.settings.unit : "ft");
+    wire();
+    renderAll();
+
+    if (!state.settings.welcomed) openSettings(true);
+    syncNow(false);
+  }
+
+  init().catch(function (err) {
+    console.error(err);
+    toast("River Beta couldn't start: " + err.message, 6000);
+  });
+})();
+</script>
+</body>
+</html>
