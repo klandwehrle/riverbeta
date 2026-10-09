@@ -203,7 +203,17 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
   background: transparent; border: 1.5px solid var(--line); font-weight: 600;
 }
 
-/* ---------- Flows ---------- */
+/* Gauge setup questions */
+.gq { border: 1.5px solid var(--water); border-radius: 12px; padding: 14px 14px 2px; margin-bottom: 16px; background: color-mix(in srgb, var(--foam) 18%, var(--surface)); }
+.gq h3 { margin: 0 0 2px; font: 700 1.1875rem/1.2 var(--cond); font-stretch: condensed; }
+.gq > p.hint { margin: 0 0 12px; }
+.gq .seg { background: var(--surface); }
+.seg.three { grid-template-columns: 1fr 1fr 1fr; }
+.seg.three label + label { border-left: 1.5px solid var(--line); }
+.gq input[type="text"] { background: var(--surface); }
+.gq a { color: var(--river); font-weight: 600; }
+
+/* ---------- Flows (cards) ---------- */
 .flows-head { display: grid; gap: 12px; margin-bottom: 14px; }
 .filters { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
 .filters .field { margin-bottom: 12px; min-width: 0; }
@@ -434,8 +444,10 @@ details.pw summary { cursor: pointer; font-weight: 600; color: var(--river); pad
         <p class="hint" id="sectionHint" hidden></p>
       </div>
 
+      <div id="tripGauge" hidden></div>
+
       <div class="field">
-        <label for="level">Level <span class="opt">(optional)</span></label>
+        <label for="level" id="levelLabel">Level <span class="opt">(optional)</span></label>
         <div class="gauge">
           <div class="staff" aria-hidden="true"></div>
           <div class="gauge-main">
@@ -464,7 +476,7 @@ details.pw summary { cursor: pointer; font-weight: 600; color: var(--river); pad
       <div class="field">
         <button type="button" class="hazard-toggle" id="hazardToggle" aria-expanded="false" aria-controls="hazardBox">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 20h20L12 3z"/><path d="M12 10v4M12 17v.5" stroke-linecap="round"/></svg>
-          Report a hazard <span class="opt">Wood, rockfall, new drops</span>
+          Report a hazard
         </button>
         <div class="hazard-box" id="hazardBox" hidden>
           <h3>
@@ -608,8 +620,9 @@ details.pw summary { cursor: pointer; font-weight: 600; color: var(--river); pad
     <h2 id="reportTitle">Report level</h2>
     <p class="lede" id="reportRun"></p>
     <p class="hint" id="reportGaugeNote" hidden></p>
+    <div id="reportGauge" hidden></div>
     <div class="field">
-      <label for="rLevel">Level you read</label>
+      <label for="rLevel" id="rLevelLabel">Level you read</label>
       <div class="gauge">
         <div class="staff" aria-hidden="true"></div>
         <div class="gauge-main">
@@ -679,7 +692,7 @@ details.pw summary { cursor: pointer; font-weight: 600; color: var(--river); pad
    "showFav", "showAll", "flowFilters", "flRiver", "flSection", "flowFresh", "flowCountRow", "flowCount", "flowClear", "runList",
    "search", "fRiver", "fSection", "fBoat", "clearFilters", "tripList", "tripCount", "moreBtn",
    "statusBtn", "statusText", "settings", "whoami", "infoWaiting", "infoLast", "syncBtn", "installBtn", "installHelp", "signOutBtn",
-   "pwForm", "pwOld", "pwNew", "reportDlg", "reportForm", "reportRun", "reportGaugeNote", "rLevel", "rNote", "reportCancel", "toast"
+   "pwForm", "pwOld", "pwNew", "tripGauge", "reportGauge", "levelLabel", "rLevelLabel", "reportDlg", "reportForm", "reportRun", "reportGaugeNote", "rLevel", "rNote", "reportCancel", "toast"
   ].forEach(function (id) { el[id] = $(id); });
 
   var ICON_WARN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 20h20L12 3z"/><path d="M12 10v4M12 17v.5" stroke-linecap="round"/></svg>';
@@ -836,14 +849,20 @@ details.pw summary { cursor: pointer; font-weight: 600; color: var(--river); pad
   }
 
   function findGauge(river, section) {
-    var r = lower(river), s = lower(section), riverWide = null;
+    var r = lower(river), s = lower(section), riverWide = null, exact = null;
     var gs = state.data.gauges || [];
     for (var i = 0; i < gs.length; i++) {
       if (lower(gs[i].river) !== r) continue;
-      if (lower(gs[i].section) === s) return gs[i];
-      if (!gs[i].section) riverWide = gs[i];
+      if (lower(gs[i].section) === s) exact = gs[i];
+      else if (!gs[i].section) riverWide = gs[i];
     }
-    return riverWide;
+    // Answers waiting to upload fill in what the sheet doesn't have yet
+    var pend = pendingGauge(river, section);
+    if (pend && (!exact || !exact.source || (exact.source === "usgs" && !exact.gaugeId && pend.gaugeId))) {
+      return exact ? Object.assign({}, exact, { source: pend.source, gaugeId: pend.gaugeId || exact.gaugeId, units: exact.units || pend.units, notes: exact.notes || pend.notes, pending: true }) : pend;
+    }
+    if (exact && (exact.source || !riverWide)) return exact;
+    return riverWide || exact;
   }
 
   // Latest level a member read by eye (level reports, plus trips that logged a level)
@@ -909,7 +928,14 @@ details.pw summary { cursor: pointer; font-weight: 600; color: var(--river); pad
       last = b.to;
     });
     var marker = value != null && !isNaN(value) ? '<i class="marker" style="left:' + pos(value).toFixed(2) + '%"></i>' : "";
-    var ticks = marks.map(function (m) { return '<span style="left:' + pos(m).toFixed(2) + '%">' + esc(fmtNum(m)) + "</span>"; }).join("");
+    // Skip labels that would collide; the low and high ends always win
+    var sorted = marks.slice().sort(function (a, b) { return a - b; }), kept = [];
+    sorted.forEach(function (m, i) {
+      var prev = kept[kept.length - 1];
+      if (prev === undefined || pos(m) - pos(prev) >= 13) kept.push(m);
+      else if (i === sorted.length - 1 && kept.length > 1) kept[kept.length - 1] = m;
+    });
+    var ticks = kept.map(function (m) { return '<span style="left:' + pos(m).toFixed(2) + '%">' + esc(fmtNum(m)) + "</span>"; }).join("");
     return '<div class="range" aria-hidden="true"><div class="range-bar">' + segs.join("") + marker + '</div><div class="range-ticks">' + ticks + "</div></div>";
   }
 
@@ -997,6 +1023,127 @@ details.pw summary { cursor: pointer; font-weight: 600; color: var(--river); pad
     el.hazardToggle.setAttribute("aria-expanded", String(open));
     if (open) el.hzType.focus();
     else { el.hzType.value = ""; el.hzWhere.value = ""; el.hzDetails.value = ""; el.hzType.removeAttribute("aria-invalid"); }
+  }
+
+  /* ---------- Gauge setup questions ---------- */
+  // Asked when a run has no gauge set up yet. Answers fill in the Rivers sheet for everyone.
+  function gaugeQuestions(p, mode) {
+    // mode "full": ask everything; "number": the run is known to have a USGS gauge but no number yet
+    var seg = function (name, opts, cls) {
+      return '<div class="seg' + (cls ? " " + cls : "") + '">' + opts.map(function (o) {
+        return '<label><input type="radio" name="' + p + name + '" value="' + o[0] + '"> ' + o[1] + "</label>";
+      }).join("") + "</div>";
+    };
+    var html = '<div class="gq">' +
+      "<h3>" + (mode === "number" ? "Add this run's USGS gauge" : "Help set up this run's gauge") + "</h3>" +
+      '<p class="hint">' + (mode === "number" ? "This run has a USGS gauge but no number yet." : "No one has said how this run is gauged yet. Your answers fill it in for everyone.") + "</p>";
+    if (mode !== "number") {
+      html += '<fieldset class="field"><legend>Is there a USGS gauge for this run?</legend>' +
+        seg("usgs", [["yes", "Yes"], ["no", "No"], ["unsure", "Not sure"]], "three") + "</fieldset>";
+    }
+    html += '<div data-q="knows"' + (mode === "number" ? "" : " hidden") + '>' +
+      '<fieldset class="field"><legend>Do you know the gauge number?</legend>' + seg("knows", [["yes", "Yes"], ["no", "No"]]) + "</fieldset></div>" +
+      '<div data-q="id" hidden>' +
+        '<div class="field"><label for="' + p + 'id">USGS gauge number</label>' +
+        '<input type="text" id="' + p + 'id" inputmode="numeric" placeholder="12134500" autocomplete="off">' +
+        '<p class="hint">The 8-digit site number on the gauge\'s page at <a href="https://waterdata.usgs.gov" target="_blank" rel="noopener">waterdata.usgs.gov</a>.</p></div>' +
+        '<fieldset class="field"><legend>Show flows in</legend>' + seg("units", [["cfs", "cfs"], ["ft", "ft (gauge height)"]]) + "</fieldset>" +
+      "</div>" +
+      '<div data-q="visual" hidden>' +
+        '<fieldset class="field"><legend>Is it a visual gauge only? <span class="opt">(painted gauge, staff, bridge pier, rock)</span></legend>' +
+        seg("visual", [["yes", "Yes"], ["no", "No gauge at all"]]) + "</fieldset></div>" +
+      '<div data-q="where" hidden>' +
+        '<div class="field"><label for="' + p + 'where">Where is the gauge?</label>' +
+        '<input type="text" id="' + p + 'where" placeholder="Painted on the bridge pier at the put-in, river left" autocomplete="off"></div>' +
+        '<p class="hint">Enter what it reads now in the level field below.</p></div>' +
+      "</div>";
+    return html;
+  }
+
+  function mountGauge(container, p, mode) {
+    container.dataset.mode = mode || "";
+    container.dataset.prefix = p;
+    if (!mode) { container.innerHTML = ""; container.dataset.mounted = ""; container.hidden = true; updateGaugeQ(container); return; }
+    if (container.dataset.mounted === mode) { container.hidden = false; return; }
+    container.dataset.mounted = mode;
+    container.innerHTML = gaugeQuestions(p, mode);
+    container.hidden = false;
+    var units = container.querySelector('input[name="' + p + 'units"][value="cfs"]');
+    if (units) units.checked = true;
+    container.onchange = function () { updateGaugeQ(container); };
+    updateGaugeQ(container);
+  }
+
+  function radioVal(name) { var c = document.querySelector('input[name="' + name + '"]:checked'); return c ? c.value : ""; }
+
+  function updateGaugeQ(container) {
+    var p = container.dataset.prefix, mode = container.dataset.mode;
+    var visualLevel = false;
+    if (mode) {
+      var usgs = mode === "number" ? "yes" : radioVal(p + "usgs");
+      var knows = radioVal(p + "knows");
+      var show = function (q, on) { var n = container.querySelector('[data-q="' + q + '"]'); if (n) n.hidden = !on; };
+      show("knows", usgs === "yes");
+      show("id", usgs === "yes" && knows === "yes");
+      show("visual", usgs === "no" || usgs === "unsure");
+      var visual = radioVal(p + "visual");
+      visualLevel = (usgs === "no" || usgs === "unsure") && visual === "yes";
+      show("where", visualLevel);
+    }
+    // For a visual gauge, the current level is part of the answer
+    if (container === el.tripGauge) {
+      el.levelLabel.innerHTML = visualLevel ? "Current level on the gauge" : 'Level <span class="opt">(optional)</span>';
+    } else {
+      el.rLevelLabel.textContent = visualLevel ? "Current level on the gauge" : "Level you read";
+    }
+  }
+
+  // Returns { info, error, focus }. info is null when there's nothing to save.
+  function readGauge(container, levelInput, unit) {
+    var mode = container.dataset.mode, p = container.dataset.prefix;
+    if (!mode || container.hidden) return { info: null };
+    var q = function (sel) { return container.querySelector(sel); };
+    var usgs = mode === "number" ? "yes" : radioVal(p + "usgs");
+    if (!usgs) return { error: "Answer whether this run has a USGS gauge.", focus: q('input[name="' + p + 'usgs"]') };
+    if (usgs === "yes") {
+      var knows = radioVal(p + "knows");
+      if (!knows) return { error: "Answer whether you know the gauge number.", focus: q('input[name="' + p + 'knows"]') };
+      if (knows === "no") return { info: mode === "number" ? null : { source: "USGS" } };
+      var id = q("#" + p + "id").value.replace(/\D/g, "");
+      if (!/^\d{8,15}$/.test(id)) return { error: "USGS gauge numbers are 8 to 15 digits, like 12134500.", focus: q("#" + p + "id") };
+      return { info: { source: "USGS", gaugeId: id, units: radioVal(p + "units") || "cfs" } };
+    }
+    var visual = radioVal(p + "visual");
+    if (!visual) return { error: "Answer whether it's a visual gauge.", focus: q('input[name="' + p + 'visual"]') };
+    if (visual === "no") return { info: usgs === "no" ? { source: "None" } : null };
+    var where = q("#" + p + "where").value.trim();
+    if (!where) return { error: "Describe where the gauge is so others can find it.", focus: q("#" + p + "where") };
+    if (!levelInput.value.trim()) return { error: "Enter what the gauge reads now.", focus: levelInput };
+    return { info: { source: "Visual", where: where, units: unit || "" } };
+  }
+
+  // Which question set (if any) a run needs
+  function gaugeMode(river, section) {
+    if (!river) return "";
+    var g = findGauge(river, section);
+    if (g && g.source === "usgs" && !g.gaugeId) return "number";
+    return g && g.source ? "" : "full";
+  }
+
+  function pendingGauge(river, section) {
+    var k = runKey(river, section), found = null;
+    state.outbox.forEach(function (o) {
+      if (o.gaugeInfo && runKey(o.river, o.section) === k) found = o.gaugeInfo;
+    });
+    if (!found) return null;
+    var src = lower(found.source);
+    return {
+      river: river, section: section, pending: true,
+      source: src === "usgs" ? "usgs" : src === "none" ? "none" : "visual",
+      gaugeId: found.gaugeId ? "USGS-" + found.gaugeId : "",
+      units: found.units || "", notes: found.where || "",
+      low: null, idealLow: null, idealHigh: null, high: null
+    };
   }
 
   /* ---------- Flows ---------- */
@@ -1089,12 +1236,16 @@ details.pw summary { cursor: pointer; font-weight: 600; color: var(--river); pad
         stale = hoursSince(member.time) > 48;
         sourceLine = (g && g.source === "visual" ? "Visual gauge" : "Member report") + ", " +
           (member.who ? esc(member.who) + ", " : "") + esc(timeAgo(member.time)) + (member.pending ? " (waiting to upload)" : "");
+      } else if (g && g.source === "usgs" && !g.gaugeId) {
+        sourceLine = "USGS gauge, number not added yet. Tap Report level to add it.";
       } else if (g && g.source === "usgs") {
-        sourceLine = "USGS gauge " + esc(g.gaugeId.replace(/^USGS-/, "")) + ": no reading downloaded yet";
+        sourceLine = "USGS gauge " + esc(g.gaugeId.replace(/^USGS-/, "")) + (g.pending ? " (waiting to upload)" : ": no reading downloaded yet");
+      } else if (g && g.source === "none") {
+        sourceLine = "No gauge on this run. Members' trip levels show here.";
       } else if (g && g.source === "visual") {
         sourceLine = "Visual gauge: no one has reported a level yet";
       } else {
-        sourceLine = "No gauge set up for this run yet";
+        sourceLine = "No gauge set up yet. Tap Report level to add it.";
       }
 
       var b = primary ? band(g, primary.value, primary.unit || (g && g.units)) : null;
@@ -1150,6 +1301,8 @@ details.pw summary { cursor: pointer; font-weight: 600; color: var(--river); pad
     el.reportGaugeNote.textContent = g && g.notes ? "Where to read it: " + g.notes : "";
     el.rLevel.value = "";
     el.rNote.value = "";
+    el.reportGauge.dataset.mounted = "";
+    mountGauge(el.reportGauge, "rg-", gaugeMode(run.river, run.section));
     setUnit("report", g && g.units ? g.units : (state.settings.reportUnit !== undefined ? state.settings.reportUnit : "ft"));
     setVis("repVis", state.settings.visibility);
     el.reportDlg.showModal();
@@ -1158,8 +1311,10 @@ details.pw summary { cursor: pointer; font-weight: 600; color: var(--river); pad
 
   async function saveReport(e) {
     e.preventDefault();
+    var gq = readGauge(el.reportGauge, el.rLevel, state.unit.report);
+    if (gq.error) { toast(gq.error, 4000); if (gq.focus) gq.focus.focus(); return; }
     var lvl = el.rLevel.value.trim();
-    if (!lvl) { el.rLevel.closest(".gauge").setAttribute("aria-invalid", "true"); el.rLevel.focus(); return; }
+    if (!lvl) { el.rLevel.closest(".gauge").setAttribute("aria-invalid", "true"); el.rLevel.focus(); toast("Enter the level you read."); return; }
     el.rLevel.closest(".gauge").removeAttribute("aria-invalid");
     if (state.unit.report && /^-?\d+(?:[.,]\d+)?$/.test(lvl)) lvl += " " + state.unit.report;
     var run = state.reportRun;
@@ -1167,6 +1322,7 @@ details.pw summary { cursor: pointer; font-weight: 600; color: var(--river); pad
       kind: "report", id: uuid(), river: run.river, section: run.section, level: lvl,
       note: el.rNote.value.trim(), visibility: vis("repVis"), time: new Date().toISOString(), createdAt: new Date().toISOString()
     };
+    if (gq.info) report.gaugeInfo = gq.info;
     await RB.db.put("outbox", report);
     state.settings.visibility = report.visibility;
     state.settings.reportUnit = state.unit.report;
@@ -1344,6 +1500,19 @@ details.pw summary { cursor: pointer; font-weight: 600; color: var(--river); pad
     if (state.outbox.some(function (t) { return t.id === id; })) toast(offlineMsg, 4500);
   }
 
+  // New river or section: ask how it's gauged. Known USGS run without a number: ask for the number.
+  function renderTripGauge() {
+    var river = chosen(el.river, el.riverNew);
+    var isNew = el.river.value === NEW || el.section.value === NEW;
+    var section = chosen(el.section, el.sectionNew);
+    var mode = "";
+    if (river) {
+      var m = gaugeMode(river, section);
+      if (m === "number" || (isNew && m)) mode = m;
+    }
+    mountGauge(el.tripGauge, "tg-", mode);
+  }
+
   /* ---------- Saving a trip ---------- */
   async function saveTrip(e) {
     e.preventDefault();
@@ -1352,6 +1521,8 @@ details.pw summary { cursor: pointer; font-weight: 600; color: var(--river); pad
     [el.date, el.river, el.riverNew, el.hzType].forEach(function (f) { f.removeAttribute("aria-invalid"); });
     if (!el.date.value) { el.date.setAttribute("aria-invalid", "true"); el.date.focus(); toast("Pick the date of the trip."); return; }
     if (!river) { riverField.setAttribute("aria-invalid", "true"); riverField.focus(); toast("Choose a river, or add a new one."); return; }
+    var gq = readGauge(el.tripGauge, el.level, state.unit.trip);
+    if (gq.error) { toast(gq.error, 4000); if (gq.focus) gq.focus.focus(); return; }
     var hazardOpen = !el.hazardBox.hidden;
     if (hazardOpen && !el.hzType.value) {
       el.hzType.setAttribute("aria-invalid", "true"); el.hzType.focus();
@@ -1365,6 +1536,7 @@ details.pw summary { cursor: pointer; font-weight: 600; color: var(--river); pad
       kind: "trip", id: uuid(), date: el.date.value, river: river, section: chosen(el.section, el.sectionNew),
       level: lvl, boat: boat, notes: el.notes.value.trim(), visibility: vis("tripVis"), createdAt: new Date().toISOString()
     };
+    if (gq.info) trip.gaugeInfo = gq.info;
     if (hazardOpen) trip.hazard = { id: uuid(), type: el.hzType.value, where: el.hzWhere.value.trim(), details: el.hzDetails.value.trim() };
 
     await RB.db.put("outbox", trip);
@@ -1379,6 +1551,7 @@ details.pw summary { cursor: pointer; font-weight: 600; color: var(--river); pad
     el.section.value = ""; el.sectionNew.value = ""; el.sectionHint.hidden = true;
     el.level.value = ""; el.notes.value = ""; el.boat.value = ""; el.boatNew.value = "";
     openHazard(false);
+    mountGauge(el.tripGauge, "tg-", "");
     renderAll();
     window.scrollTo({ top: 0, behavior: "smooth" });
     toast(trip.hazard ? "Trip and hazard saved on this phone." : "Trip saved on this phone.");
@@ -1521,25 +1694,29 @@ details.pw summary { cursor: pointer; font-weight: 600; color: var(--river); pad
       renderSections();
       if (el.river.value === NEW) { fillSelect(el.section, [], "No section", "+ Add a new section", ""); el.riverNew.focus(); }
       renderBeta();
+      renderTripGauge();
     });
     el.riverNew.addEventListener("input", function () {
       similarCheck(el.riverNew.value, lists().rivers, el.riverHint, function (name) {
-        el.river.value = name; toggleNew(el.river, el.riverNew); renderSections(); renderBeta();
+        el.river.value = name; toggleNew(el.river, el.riverNew); renderSections(); renderBeta(); renderTripGauge();
       });
       renderBeta();
+      renderTripGauge();
     });
     el.section.addEventListener("change", function () {
       toggleNew(el.section, el.sectionNew);
       el.sectionHint.hidden = true;
       if (el.section.value === NEW) el.sectionNew.focus();
       renderBeta();
+      renderTripGauge();
     });
     el.sectionNew.addEventListener("input", function () {
       var existing = lists().sections[el.river.value] || [];
       if (chosen(el.river, el.riverNew)) similarCheck(el.sectionNew.value, existing, el.sectionHint, function (name) {
-        el.section.value = name; toggleNew(el.section, el.sectionNew); renderBeta();
+        el.section.value = name; toggleNew(el.section, el.sectionNew); renderBeta(); renderTripGauge();
       });
       renderBeta();
+      renderTripGauge();
     });
     el.boat.addEventListener("change", function () { toggleNew(el.boat, el.boatNew); if (el.boat.value === NEW) el.boatNew.focus(); });
     document.querySelectorAll(".units").forEach(function (group) {
