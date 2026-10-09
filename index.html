@@ -243,6 +243,10 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 .reading .num { font: 700 2.5rem/1 var(--cond); font-stretch: condensed; font-variant-numeric: tabular-nums; }
 .reading .unit { font-size: 1rem; color: var(--muted); font-weight: 600; }
 .reading .none { font-size: 1rem; color: var(--muted); }
+.reading .also {
+  flex-basis: 100%; margin-top: 2px;
+  font: 700 1.25rem/1.1 var(--cond); font-stretch: condensed; font-variant-numeric: tabular-nums; color: var(--muted);
+}
 .band {
   display: inline-block; margin-left: 4px; padding: 3px 10px; border-radius: 999px; font-size: 0.875rem; font-weight: 700;
   align-self: center; color: #17282C;
@@ -889,7 +893,11 @@ details.pw summary { cursor: pointer; font-weight: 600; color: var(--river); pad
     var unit = g.units || (site.cfs ? "cfs" : "ft");
     var r = site[unit] || site.cfs || site.ft;
     if (!r) return null;
-    return { value: r.value, unit: site[unit] ? unit : (site.cfs ? "cfs" : "ft"), time: r.time };
+    var main = site[unit] ? unit : (site.cfs ? "cfs" : "ft");
+    var otherUnit = main === "cfs" ? "ft" : "cfs";
+    // Most USGS gauges report both flow (cfs) and gauge height (ft); keep the other one too
+    var other = site[otherUnit] ? { value: site[otherUnit].value, unit: otherUnit, time: site[otherUnit].time } : null;
+    return { value: r.value, unit: main, time: r.time, other: other };
   }
 
   function band(g, value, unit) {
@@ -991,7 +999,8 @@ details.pw summary { cursor: pointer; font-weight: 600; color: var(--river); pad
     var r = gaugeReading(g);
     if (r) {
       var b = band(g, r.value, r.unit);
-      parts.push("Gauge now <strong>" + esc(fmtNum(r.value) + " " + r.unit) + "</strong>" + (b ? " (" + b.label.toLowerCase() + ")" : "") + ".");
+      parts.push("Gauge now <strong>" + esc(fmtNum(r.value) + " " + r.unit) + "</strong>" +
+        (r.other ? " / " + esc(fmtNum(r.other.value) + " " + r.other.unit) : "") + (b ? " (" + b.label.toLowerCase() + ")" : "") + ".");
     }
     var hz = activeHazards().filter(function (h) { return runKey(h.river, h.section) === runKey(river, section); });
     if (hz.length) parts.push('<span class="warn">' + hz.length + (hz.length === 1 ? " active hazard: " : " active hazards: ") + esc(hz.map(function (h) { return h.type; }).join(", ")) + ".</span>");
@@ -1251,7 +1260,8 @@ details.pw summary { cursor: pointer; font-weight: 600; color: var(--river); pad
       var b = primary ? band(g, primary.value, primary.unit || (g && g.units)) : null;
       var reading = primary
         ? '<span class="num">' + esc(primary.text) + '</span><span class="unit">' + esc(primary.unit || "") + "</span>" +
-          (b ? '<span class="band ' + b.key + '">' + b.label + "</span>" : "")
+          (b ? '<span class="band ' + b.key + '">' + b.label + "</span>" : "") +
+          (official && official.other ? '<span class="also">' + esc(fmtNum(official.other.value)) + " " + esc(official.other.unit) + "</span>" : "")
         : '<span class="none">No current level</span>';
 
       // When the gauge is official, also show what members read by eye
@@ -1412,7 +1422,7 @@ details.pw summary { cursor: pointer; font-weight: 600; color: var(--river); pad
         "<div><h3>" + esc(t.river) + "</h3>" +
         (t.section ? '<p class="section">' + esc(t.section) + "</p>" : "") +
         '<p class="meta">' + meta + "</p>" +
-        (t.gauge ? '<p class="meta">USGS gauge: ' + esc(t.gauge) + "</p>" : "") +
+        (t.gauge ? '<p class="meta">USGS gauge at the time: ' + esc(t.gauge) + "</p>" : "") +
         (t.notes ? '<p class="notes">' + esc(t.notes) + "</p>" : "") +
         (tags.length ? '<div class="tags">' + tags.join("") + "</div>" : "") +
         "</div></li>";
