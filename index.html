@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>River Beta</title>
-<meta name="description" content="Log river levels and trips, even with no service.">
+<meta name="description" content="Log river levels, flows and hazards, even with no service.">
 
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1F4E57" media="(prefers-color-scheme: light)">
@@ -31,9 +31,16 @@
   --pfd: #F4C02E;
   --pfd-ink: #17282C;
   --alert: #A8321F;
+  --alert-bg: #F9E3DE;
   --focus: #2C6F7A;
   --head: #1F4E57;
   --head-ink: #F6F9F8;
+  /* flow bands */
+  --b-toolow: #A9B5B2;
+  --b-low: #8FD0CB;
+  --b-good: #3E9C6B;
+  --b-high: #E8A23A;
+  --b-toohigh: #C4452F;
   --cond: "Avenir Next Condensed", "Roboto Condensed", "sans-serif-condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
   --body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color-scheme: light dark;
@@ -49,7 +56,11 @@
     --head: #15292D;
     --head-ink: #E4EDEB;
     --alert: #F08A7A;
+    --alert-bg: #3A2320;
     --focus: #9FDCD8;
+    --b-toolow: #5E6E6B;
+    --b-low: #5FAFAA;
+    --b-good: #4DB37E;
   }
 }
 
@@ -65,6 +76,7 @@ body {
 button, input, select, textarea { font: inherit; color: inherit; }
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 [hidden] { display: none !important; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* ---------- Top bar ---------- */
 .topbar {
@@ -72,14 +84,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
   background: var(--head); color: var(--head-ink);
   padding: calc(env(safe-area-inset-top, 0px) + 10px) 16px 10px;
 }
-.topbar-inner {
-  max-width: 560px; margin: 0 auto;
-  display: flex; align-items: center; gap: 10px;
-}
-.topbar h1 {
-  margin: 0; flex: 1;
-  font: 700 1.5rem/1.1 var(--cond); font-stretch: condensed; letter-spacing: 0.01em;
-}
+.topbar-inner { max-width: 560px; margin: 0 auto; display: flex; align-items: center; gap: 10px; }
+.topbar h1 { margin: 0; flex: 1; font: 700 1.5rem/1.1 var(--cond); font-stretch: condensed; letter-spacing: 0.01em; }
 .status {
   border: 1.5px solid rgba(255,255,255,0.35); background: transparent; color: inherit;
   border-radius: 999px; padding: 5px 12px; font-size: 0.875rem; cursor: pointer;
@@ -93,15 +99,12 @@ button, input, select, textarea { font: inherit; color: inherit; }
 @keyframes pulse { 50% { opacity: 0.25; } }
 .icon-btn {
   background: transparent; border: 0; color: inherit; cursor: pointer;
-  width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center;
+  width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; flex: none;
 }
 .icon-btn svg { width: 22px; height: 22px; }
 
 /* ---------- Layout ---------- */
-main {
-  max-width: 560px; margin: 0 auto;
-  padding: 18px 16px calc(env(safe-area-inset-bottom, 0px) + 96px);
-}
+main { max-width: 560px; margin: 0 auto; padding: 18px 16px calc(env(safe-area-inset-bottom, 0px) + 96px); }
 .banner {
   background: var(--surface); border-left: 6px solid var(--pfd);
   padding: 12px 14px; border-radius: 8px; margin-bottom: 18px; font-size: 0.9375rem;
@@ -110,13 +113,10 @@ main {
 
 /* ---------- Form ---------- */
 .field { margin-bottom: 16px; }
-.field > label, .label {
-  display: block; font-weight: 600; font-size: 0.9375rem; margin-bottom: 6px;
-}
-.label .opt, label .opt { font-weight: 400; color: var(--muted); }
-input[type="text"], input[type="date"], input[type="password"], select, textarea {
-  width: 100%; min-height: 50px;
-  font-size: 1.0625rem; padding: 11px 14px;
+.field > label, .label, legend { display: block; font-weight: 600; font-size: 0.9375rem; margin-bottom: 6px; padding: 0; }
+.opt { font-weight: 400; color: var(--muted); }
+input[type="text"], input[type="date"], input[type="password"], input[type="email"], select, textarea {
+  width: 100%; min-height: 50px; font-size: 1.0625rem; padding: 11px 14px;
   background: var(--surface); border: 1.5px solid var(--line); border-radius: 10px;
 }
 textarea { min-height: 96px; resize: vertical; }
@@ -124,22 +124,18 @@ input[type="date"] { -webkit-appearance: none; appearance: none; }
 .select { position: relative; }
 .select select { -webkit-appearance: none; appearance: none; padding-right: 40px; }
 .select::after {
-  content: ""; position: absolute; right: 16px; top: 50%;
-  width: 9px; height: 9px; margin-top: -7px;
-  border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted);
-  transform: rotate(45deg); pointer-events: none;
+  content: ""; position: absolute; right: 16px; top: 50%; width: 9px; height: 9px; margin-top: -7px;
+  border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); pointer-events: none;
 }
 .new-input { margin-top: 8px; }
 .hint { margin: 8px 0 0; font-size: 0.9375rem; color: var(--muted); }
-.hint button {
-  background: none; border: 0; padding: 0; color: var(--river);
-  font-weight: 600; text-decoration: underline; cursor: pointer;
+.hint button, .link {
+  background: none; border: 0; padding: 0; color: var(--river); font-weight: 600; text-decoration: underline; cursor: pointer;
 }
-.row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-@media (max-width: 360px) { .row { grid-template-columns: 1fr; } }
 [aria-invalid="true"] { border-color: var(--alert) !important; }
+fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 
-/* The staff gauge: the level is the heart of river beta */
+/* The staff gauge */
 .gauge {
   display: grid; grid-template-columns: 30px 1fr;
   background: var(--surface); border: 1.5px solid var(--line); border-radius: 12px; overflow: hidden;
@@ -149,18 +145,15 @@ input[type="date"] { -webkit-appearance: none; appearance: none; }
   background-image:
     repeating-linear-gradient(to bottom, #17282C 0 3px, transparent 3px 48px),
     repeating-linear-gradient(to bottom, #17282C 0 3px, transparent 3px 12px);
-  background-size: 78% 100%, 44% 100%;
-  background-repeat: no-repeat;
-  background-position: 4px 10px, 4px 10px;
+  background-size: 78% 100%, 44% 100%; background-repeat: no-repeat; background-position: 4px 10px, 4px 10px;
 }
 .gauge-main { padding: 6px 12px 12px 14px; min-width: 0; }
-#level {
-  width: 100%; border: 0; background: transparent; padding: 0;
-  font: 700 3.25rem/1.15 var(--cond); font-stretch: condensed;
-  font-variant-numeric: tabular-nums; letter-spacing: -0.01em;
+.gauge .gauge-input {
+  width: 100%; min-height: 0; border: 0; border-radius: 0; background: transparent; padding: 0;
+  font: 700 3.25rem/1.15 var(--cond); font-stretch: condensed; font-variant-numeric: tabular-nums; letter-spacing: -0.01em;
 }
-#level::placeholder { color: var(--line); }
-#level:focus-visible { outline: none; }
+.gauge .gauge-input::placeholder { color: var(--line); }
+.gauge .gauge-input:focus-visible { outline: none; }
 .gauge:focus-within { border-color: var(--focus); box-shadow: 0 0 0 2px var(--focus); }
 .units { display: flex; gap: 6px; flex-wrap: wrap; }
 .units button {
@@ -168,8 +161,35 @@ input[type="date"] { -webkit-appearance: none; appearance: none; }
   padding: 5px 12px; font-size: 0.9375rem; cursor: pointer; min-height: 36px;
 }
 .units button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
-.beta-line { margin: 8px 2px 0; font-size: 0.9375rem; color: var(--muted); min-height: 1.5em; }
+.beta-line { margin: 8px 2px 0; font-size: 0.9375rem; color: var(--muted); }
+.beta-line:empty { display: none; }
 .beta-line strong { color: var(--ink); }
+.beta-line .warn { color: var(--alert); font-weight: 600; }
+
+/* Segmented choices (privacy, flows view) */
+.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border: 1.5px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+.seg label, .seg button {
+  display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 46px; padding: 6px 10px;
+  font-weight: 600; font-size: 0.9375rem; cursor: pointer; text-align: center; background: transparent; border: 0;
+}
+.seg label + label, .seg button + button { border-left: 1.5px solid var(--line); }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label:has(input:checked), .seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.seg label:has(input:focus-visible) { outline: 3px solid var(--focus); outline-offset: -3px; }
+
+/* Hazard block at the bottom of the trip form */
+.hazard-toggle {
+  width: 100%; display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 10px 14px;
+  background: var(--surface); border: 1.5px dashed var(--line); border-radius: 10px; cursor: pointer;
+  font-weight: 600; text-align: left;
+}
+.hazard-toggle svg { width: 22px; height: 22px; color: var(--alert); flex: none; }
+.hazard-toggle .opt { margin-left: auto; }
+.hazard-box { border: 1.5px solid var(--alert); border-radius: 12px; padding: 14px 14px 2px; background: var(--alert-bg); }
+.hazard-box h3 { margin: 0 0 10px; display: flex; align-items: center; gap: 8px; font: 700 1.1875rem/1.2 var(--cond); font-stretch: condensed; }
+.hazard-box h3 svg { width: 20px; height: 20px; color: var(--alert); }
+.hazard-box h3 .link { margin-left: auto; font: 600 0.9375rem var(--body); }
+.hazard-box input, .hazard-box select, .hazard-box textarea { background: var(--surface); }
 
 .primary {
   width: 100%; min-height: 56px; margin-top: 6px;
@@ -177,12 +197,14 @@ input[type="date"] { -webkit-appearance: none; appearance: none; }
   font: 700 1.3125rem/1 var(--cond); font-stretch: condensed; letter-spacing: 0.01em;
 }
 .primary:active { transform: translateY(1px); }
+.primary:disabled { opacity: 0.6; cursor: default; }
 .secondary {
   min-height: 46px; padding: 0 16px; border-radius: 10px; cursor: pointer;
   background: transparent; border: 1.5px solid var(--line); font-weight: 600;
 }
 
-/* ---------- History ---------- */
+/* ---------- Flows ---------- */
+.flows-head { display: grid; gap: 12px; margin-bottom: 14px; }
 .filters { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
 .filters .field { margin-bottom: 12px; min-width: 0; }
 .filters select, .filters input[type="text"] { min-height: 46px; font-size: 1rem; padding-top: 9px; padding-bottom: 9px; }
@@ -191,27 +213,69 @@ input[type="date"] { -webkit-appearance: none; appearance: none; }
 @media (prefers-color-scheme: dark) { .filters .active select, .filters .active input { border-color: var(--foam); box-shadow: inset 0 0 0 1px var(--foam); } }
 .count-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 2px 10px; min-height: 36px; }
 .count { color: var(--muted); font-size: 0.875rem; margin: 0; }
-.clear {
-  background: none; border: 0; padding: 6px 0; cursor: pointer;
-  color: var(--river); font-weight: 600; font-size: 0.9375rem; text-decoration: underline;
+.clear { background: none; border: 0; padding: 6px 0; cursor: pointer; color: var(--river); font-weight: 600; font-size: 0.9375rem; text-decoration: underline; }
+.fresh { font-size: 0.875rem; color: var(--muted); margin: 0 2px; }
+.fresh.stale { color: var(--alert); font-weight: 600; }
+
+.runs { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.run { background: var(--surface); border: 1.5px solid var(--line); border-radius: 14px; padding: 14px 14px 12px 16px; position: relative; }
+.run-top { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: start; }
+.run h3 { margin: 0; font: 700 1.25rem/1.15 var(--cond); font-stretch: condensed; }
+.run .section { margin: 1px 0 0; }
+.star {
+  width: 44px; height: 44px; margin: -8px -8px 0 0; border: 0; background: none; cursor: pointer;
+  display: grid; place-items: center; color: var(--muted); border-radius: 10px;
 }
-.trips {
-  list-style: none; margin: 0; padding: 0;
-  background: var(--surface); border-radius: 12px; border: 1.5px solid var(--line); overflow: hidden;
+.star svg { width: 26px; height: 26px; }
+.star[aria-pressed="true"] { color: #D9A514; }
+.star[aria-pressed="true"] svg path { fill: currentColor; }
+.reading { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.reading .num { font: 700 2.5rem/1 var(--cond); font-stretch: condensed; font-variant-numeric: tabular-nums; }
+.reading .unit { font-size: 1rem; color: var(--muted); font-weight: 600; }
+.reading .none { font-size: 1rem; color: var(--muted); }
+.band {
+  display: inline-block; margin-left: 4px; padding: 3px 10px; border-radius: 999px; font-size: 0.875rem; font-weight: 700;
+  align-self: center; color: #17282C;
 }
-.trip {
-  display: grid; grid-template-columns: 82px 1fr; gap: 12px;
-  padding: 14px 14px 14px 0; border-top: 1px solid var(--line);
+.band.toolow { background: var(--b-toolow); }
+.band.low { background: var(--b-low); }
+.band.good, .band.runnable { background: var(--b-good); color: #fff; }
+.band.high { background: var(--b-high); }
+.band.toohigh { background: var(--b-toohigh); color: #fff; }
+.source { margin: 4px 0 0; font-size: 0.875rem; color: var(--muted); }
+.source.stale { color: var(--alert); }
+
+/* range bar: the run's own staff gauge laid sideways */
+.range { margin: 12px 0 4px; }
+.range-bar { position: relative; display: flex; height: 12px; border-radius: 3px; overflow: visible; }
+.range-bar span { height: 100%; }
+.range-bar span:first-child { border-radius: 3px 0 0 3px; }
+.range-bar span:last-of-type { border-radius: 0 3px 3px 0; }
+.range-bar .marker {
+  position: absolute; top: -6px; width: 4px; height: 24px; margin-left: -2px; background: var(--ink); border-radius: 2px;
+  box-shadow: 0 0 0 2px var(--surface);
 }
+.range-ticks { position: relative; height: 18px; font-size: 0.75rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.range-ticks span { position: absolute; top: 2px; transform: translateX(-50%); white-space: nowrap; }
+
+.member-line { margin: 8px 0 0; font-size: 0.9375rem; }
+.member-line .who { color: var(--muted); }
+.gauge-note { margin: 6px 0 0; font-size: 0.875rem; color: var(--muted); }
+.hz { margin: 10px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--alert-bg); border-left: 5px solid var(--alert); }
+.hz-title { margin: 0; font-weight: 700; display: flex; gap: 8px; align-items: center; }
+.hz-title svg { width: 18px; height: 18px; color: var(--alert); flex: none; }
+.hz p { margin: 2px 0 0; font-size: 0.9375rem; overflow-wrap: anywhere; }
+.hz .meta { color: var(--muted); font-size: 0.8125rem; }
+.hz .link { font-size: 0.875rem; margin-top: 6px; }
+.run-actions { display: flex; gap: 10px; margin-top: 12px; }
+.run-actions .secondary { min-height: 40px; font-size: 0.9375rem; padding: 0 14px; }
+
+/* ---------- History ---------- */
+.trips { list-style: none; margin: 0; padding: 0; background: var(--surface); border-radius: 12px; border: 1.5px solid var(--line); overflow: hidden; }
+.trip { display: grid; grid-template-columns: 82px 1fr; gap: 12px; padding: 14px 14px 14px 0; border-top: 1px solid var(--line); }
 .trip:first-child { border-top: 0; }
-.trip-level {
-  border-left: 6px solid var(--pfd); padding-left: 10px;
-  display: flex; flex-direction: column; justify-content: flex-start;
-}
-.trip-level .num {
-  font: 700 1.75rem/1.05 var(--cond); font-stretch: condensed; font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
-}
+.trip-level { border-left: 6px solid var(--pfd); padding-left: 10px; display: flex; flex-direction: column; justify-content: flex-start; }
+.trip-level .num { font: 700 1.75rem/1.05 var(--cond); font-stretch: condensed; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .trip-level .num.text { font-size: 1.0625rem; line-height: 1.25; }
 .trip-level .unit { font-size: 0.8125rem; color: var(--muted); }
 .trip h3 { margin: 0; font: 700 1.1875rem/1.2 var(--cond); font-stretch: condensed; }
@@ -219,20 +283,20 @@ input[type="date"] { -webkit-appearance: none; appearance: none; }
 .trip .meta { margin: 4px 0 0; font-size: 0.875rem; color: var(--muted); }
 .trip .notes { margin: 6px 0 0; font-size: 0.9375rem; white-space: pre-wrap; overflow-wrap: anywhere; }
 .trip.pending { background: color-mix(in srgb, var(--pfd) 14%, var(--surface)); }
-.tag {
-  display: inline-block; margin-top: 6px; font-size: 0.8125rem; font-weight: 600;
-  background: var(--pfd); color: var(--pfd-ink); padding: 2px 8px; border-radius: 6px;
-}
-.empty { padding: 28px 18px; text-align: center; color: var(--muted); }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.tag { display: inline-block; font-size: 0.8125rem; font-weight: 600; background: var(--pfd); color: var(--pfd-ink); padding: 2px 8px; border-radius: 6px; }
+.tag.quiet { background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
+.tag.hazard { background: var(--alert); color: #fff; }
+.empty { padding: 28px 18px; text-align: center; color: var(--muted); background: var(--surface); border-radius: 12px; border: 1.5px solid var(--line); }
+.trips .empty { border: 0; }
 .more { display: block; margin: 14px auto 0; }
 
 /* ---------- Bottom tabs ---------- */
 .tabs {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
-  background: var(--surface); border-top: 1px solid var(--line);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: var(--surface); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom, 0px);
 }
-.tabs-inner { max-width: 560px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; }
+.tabs-inner { max-width: 560px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); }
 .tabs button {
   background: none; border: 0; cursor: pointer; min-height: 60px;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
@@ -245,41 +309,90 @@ input[type="date"] { -webkit-appearance: none; appearance: none; }
 
 /* ---------- Toast ---------- */
 .toast {
-  position: fixed; left: 16px; right: 16px; z-index: 10;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 76px);
-  max-width: 528px; margin: 0 auto;
-  background: var(--ink); color: var(--bg); border-radius: 12px;
-  padding: 13px 16px; font-size: 0.9375rem;
-  transform: translateY(12px); opacity: 0; pointer-events: none;
+  position: fixed; left: 16px; right: 16px; z-index: 30; bottom: calc(env(safe-area-inset-bottom, 0px) + 76px);
+  max-width: 528px; margin: 0 auto; background: var(--ink); color: var(--bg); border-radius: 12px;
+  padding: 13px 16px; font-size: 0.9375rem; transform: translateY(12px); opacity: 0; pointer-events: none;
   transition: opacity 0.18s, transform 0.18s;
 }
 .toast.show { opacity: 1; transform: none; }
-@media (prefers-reduced-motion: reduce) {
-  .toast { transition: none; }
-  .status.busy .dot { animation: none; }
-}
+@media (prefers-reduced-motion: reduce) { .toast { transition: none; } .status.busy .dot { animation: none; } }
 
-/* ---------- Settings dialog ---------- */
+/* ---------- Dialogs ---------- */
 dialog {
   width: min(520px, calc(100% - 24px)); max-height: calc(100% - 40px);
-  border: 0; border-radius: 16px; padding: 0;
-  background: var(--surface); color: var(--ink);
+  border: 0; border-radius: 16px; padding: 0; background: var(--surface); color: var(--ink);
 }
 dialog::backdrop { background: rgba(10, 25, 28, 0.55); }
 .dialog-body { padding: 20px 20px 22px; }
 dialog h2 { margin: 0 0 4px; font: 700 1.5rem/1.15 var(--cond); font-stretch: condensed; }
 dialog .lede { margin: 0 0 18px; color: var(--muted); }
-.sync-info { margin: 4px 0 16px; padding: 12px 14px; border-radius: 10px; background: var(--bg); font-size: 0.9375rem; }
-.sync-info p { margin: 0; }
-.sync-info p + p { margin-top: 4px; }
+.box { margin: 4px 0 16px; padding: 12px 14px; border-radius: 10px; background: var(--bg); font-size: 0.9375rem; }
+.box p { margin: 0; }
+.box p + p { margin-top: 4px; }
 .dialog-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
 .dialog-actions .primary { flex: 1 1 100%; margin-top: 0; }
 .install { margin-top: 14px; font-size: 0.9375rem; color: var(--muted); }
-.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+details.pw { margin: 4px 0 14px; }
+details.pw summary { cursor: pointer; font-weight: 600; color: var(--river); padding: 6px 0; }
+
+/* ---------- Sign in ---------- */
+.auth { min-height: 100vh; min-height: 100dvh; display: grid; place-items: start center; padding: calc(env(safe-area-inset-top, 0px) + 36px) 16px 40px; background: var(--head); }
+.auth-card { width: 100%; max-width: 440px; background: var(--surface); border-radius: 18px; overflow: hidden; }
+.auth-hero { display: grid; grid-template-columns: 30px 1fr; background: var(--surface); }
+.auth-hero .staff { min-height: 132px; }
+.auth-hero div:last-child { padding: 18px 18px 6px 16px; }
+.auth h1 { margin: 0; font: 700 2.5rem/1 var(--cond); font-stretch: condensed; }
+.auth .lede { margin: 8px 0 0; color: var(--muted); }
+.auth form { padding: 14px 18px 20px; }
+.auth .seg { margin-bottom: 16px; }
+.auth .error { color: var(--alert); font-weight: 600; margin: 0 0 12px; }
+.auth .small { font-size: 0.875rem; color: var(--muted); margin: 14px 0 0; }
 </style>
 </head>
 <body>
 
+<!-- ============ Sign in / create account ============ -->
+<section class="auth" id="authView" hidden aria-labelledby="authTitle">
+  <div class="auth-card">
+    <div class="auth-hero">
+      <div class="staff" aria-hidden="true"></div>
+      <div>
+        <h1 id="authTitle">River Beta</h1>
+        <p class="lede">Levels, flows and hazards from your crew.</p>
+      </div>
+    </div>
+    <form id="authForm" novalidate>
+      <div class="seg" role="group" aria-label="Account">
+        <button type="button" id="modeSignin" aria-pressed="true">Sign in</button>
+        <button type="button" id="modeSignup" aria-pressed="false">Create account</button>
+      </div>
+      <p class="error" id="authError" role="alert" hidden></p>
+      <div class="field signup-only" hidden>
+        <label for="aName">Your name</label>
+        <input type="text" id="aName" autocomplete="name" autocapitalize="words">
+      </div>
+      <div class="field">
+        <label for="aEmail">Email</label>
+        <input type="email" id="aEmail" autocomplete="email" autocapitalize="off" spellcheck="false">
+      </div>
+      <div class="field">
+        <label for="aPass">Password</label>
+        <input type="password" id="aPass" autocomplete="current-password">
+        <p class="hint signup-only" hidden>At least 8 characters.</p>
+      </div>
+      <div class="field signup-only" hidden>
+        <label for="aCode">Club code <span class="opt">(if your crew uses one)</span></label>
+        <input type="text" id="aCode" autocomplete="off" autocapitalize="off">
+      </div>
+      <button type="submit" class="primary" id="authSubmit">Sign in</button>
+      <p class="small">Signing in needs service the first time. After that, River Beta works with no signal.</p>
+      <p class="small" id="forgotHelp">Forgot your password? Ask the person who runs your club's sheet to remove your account, then create it again with the same email. Your trips stay linked to it.</p>
+    </form>
+  </div>
+</section>
+
+<!-- ============ App ============ -->
+<div id="appView" hidden>
 <header class="topbar">
   <div class="topbar-inner">
     <h1>River Beta</h1>
@@ -299,7 +412,7 @@ dialog .lede { margin: 0 0 18px; color: var(--muted); }
     This copy of River Beta isn't connected to your sheet yet. Paste your Apps Script <code>/exec</code> URL into <code>config.js</code>.
   </div>
 
-  <!-- Log trip -->
+  <!-- ===== Log trip ===== -->
   <section id="view-log" aria-labelledby="tab-log">
     <form id="tripForm" novalidate>
       <div class="field">
@@ -326,8 +439,8 @@ dialog .lede { margin: 0 0 18px; color: var(--muted); }
         <div class="gauge">
           <div class="staff" aria-hidden="true"></div>
           <div class="gauge-main">
-            <input type="text" id="level" inputmode="decimal" placeholder="0.0" autocomplete="off" enterkeyhint="next">
-            <div class="units" role="group" aria-label="Level unit">
+            <input type="text" id="level" class="gauge-input" inputmode="decimal" placeholder="0.0" autocomplete="off" enterkeyhint="next">
+            <div class="units" role="group" aria-label="Level unit" data-for="trip">
               <button type="button" data-unit="ft">ft</button>
               <button type="button" data-unit="cfs">cfs</button>
               <button type="button" data-unit="">No unit</button>
@@ -345,32 +458,90 @@ dialog .lede { margin: 0 0 18px; color: var(--muted); }
 
       <div class="field">
         <label for="notes">Notes <span class="opt">(optional)</span></label>
-        <textarea id="notes" placeholder="Wood, portages, who you paddled with…"></textarea>
+        <textarea id="notes" placeholder="Lines, portages, who you paddled with…"></textarea>
       </div>
+
+      <div class="field">
+        <button type="button" class="hazard-toggle" id="hazardToggle" aria-expanded="false" aria-controls="hazardBox">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 20h20L12 3z"/><path d="M12 10v4M12 17v.5" stroke-linecap="round"/></svg>
+          Report a hazard <span class="opt">Wood, rockfall, new drops</span>
+        </button>
+        <div class="hazard-box" id="hazardBox" hidden>
+          <h3>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 20h20L12 3z"/><path d="M12 10v4M12 17v.5" stroke-linecap="round"/></svg>
+            Hazard <button type="button" class="link" id="hazardRemove">Remove</button>
+          </h3>
+          <div class="field">
+            <label for="hzType">What is it?</label>
+            <div class="select"><select id="hzType">
+              <option value="">Choose a hazard</option>
+              <option>Wood or strainer</option>
+              <option>Logjam</option>
+              <option>Rockfall or landslide</option>
+              <option>New or changed rapid</option>
+              <option>Low bridge, fence or cable</option>
+              <option>Dam, weir or construction</option>
+              <option>Access or put-in closed</option>
+              <option>Other</option>
+            </select></div>
+          </div>
+          <div class="field">
+            <label for="hzWhere">Where on the run?</label>
+            <input type="text" id="hzWhere" placeholder="River left, just above Boulder Drop" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="hzDetails">Details <span class="opt">(optional)</span></label>
+            <textarea id="hzDetails" placeholder="How much of the channel it blocks, whether you can boat around it, portage beta"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <fieldset class="field">
+        <legend>Who sees your name, boat and notes</legend>
+        <div class="seg">
+          <label><input type="radio" name="tripVis" value="everyone"> All members</label>
+          <label><input type="radio" name="tripVis" value="private"> Only me</label>
+        </div>
+        <p class="hint">The level, gauge reading and any hazard are always shared with members.</p>
+      </fieldset>
 
       <button type="submit" class="primary">Save trip</button>
     </form>
   </section>
 
-  <!-- History -->
+  <!-- ===== Flows ===== -->
+  <section id="view-flows" aria-labelledby="tab-flows" hidden>
+    <div class="flows-head">
+      <div class="seg" role="group" aria-label="Which runs">
+        <button type="button" id="showFav" aria-pressed="true">Favorites</button>
+        <button type="button" id="showAll" aria-pressed="false">All rivers</button>
+      </div>
+      <div class="filters" id="flowFilters" hidden>
+        <div class="field">
+          <label for="flRiver">River</label>
+          <div class="select"><select id="flRiver"></select></div>
+        </div>
+        <div class="field">
+          <label for="flSection">Section</label>
+          <div class="select"><select id="flSection"></select></div>
+        </div>
+      </div>
+      <p class="fresh" id="flowFresh"></p>
+    </div>
+    <div class="count-row" id="flowCountRow" hidden>
+      <p class="count" id="flowCount"></p>
+      <button type="button" class="clear" id="flowClear" hidden>Clear filters</button>
+    </div>
+    <ul class="runs" id="runList"></ul>
+  </section>
+
+  <!-- ===== History ===== -->
   <section id="view-history" aria-labelledby="tab-history" hidden>
     <div class="filters">
-      <div class="field">
-        <label for="fRiver">River</label>
-        <div class="select"><select id="fRiver"></select></div>
-      </div>
-      <div class="field">
-        <label for="fSection">Section</label>
-        <div class="select"><select id="fSection"></select></div>
-      </div>
-      <div class="field">
-        <label for="fBoat">Boat</label>
-        <div class="select"><select id="fBoat"></select></div>
-      </div>
-      <div class="field">
-        <label for="search">Notes</label>
-        <input type="text" id="search" placeholder="Words in notes" autocomplete="off" enterkeyhint="search">
-      </div>
+      <div class="field"><label for="fRiver">River</label><div class="select"><select id="fRiver"></select></div></div>
+      <div class="field"><label for="fSection">Section</label><div class="select"><select id="fSection"></select></div></div>
+      <div class="field"><label for="fBoat">Boat</label><div class="select"><select id="fBoat"></select></div></div>
+      <div class="field"><label for="search">Notes</label><input type="text" id="search" placeholder="Words in notes" autocomplete="off" enterkeyhint="search"></div>
     </div>
     <div class="count-row">
       <p class="count" id="tripCount"></p>
@@ -387,40 +558,86 @@ dialog .lede { margin: 0 0 18px; color: var(--muted); }
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
       Log trip
     </button>
+    <button type="button" role="tab" id="tab-flows" aria-controls="view-flows" aria-selected="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 21V4M6 6h4M6 10h2.5M6 14h4M6 18h2.5"/><path d="M13 13c2-1.5 3.5 1.5 5.5 0s2.5-1 2.5-1M13 18c2-1.5 3.5 1.5 5.5 0s2.5-1 2.5-1"/></svg>
+      Flows
+    </button>
     <button type="button" role="tab" id="tab-history" aria-controls="view-history" aria-selected="false">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 9c3-2 6 2 9 0s6-2 9 0M3 15c3-2 6 2 9 0s6-2 9 0"/></svg>
       History
     </button>
   </div>
 </nav>
+</div>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+<!-- ===== Settings ===== -->
 <dialog id="settings" aria-labelledby="settingsTitle">
-  <form method="dialog" class="dialog-body" id="settingsForm">
+  <div class="dialog-body">
     <h2 id="settingsTitle">Settings</h2>
-    <p class="lede" id="settingsLede">Your name is added to every trip you log.</p>
+    <p class="lede" id="whoami"></p>
 
-    <div class="field">
-      <label for="name">Your name</label>
-      <input type="text" id="name" autocomplete="name" autocapitalize="words">
-    </div>
-    <div class="field">
-      <label for="passcode">Crew passcode <span class="opt">(only if your sheet uses one)</span></label>
-      <input type="password" id="passcode" autocomplete="off">
-    </div>
-
-    <div class="sync-info">
+    <div class="box">
       <p id="infoWaiting"></p>
       <p id="infoLast"></p>
     </div>
-
     <div class="dialog-actions">
-      <button type="submit" class="primary" value="save">Save settings</button>
       <button type="button" class="secondary" id="syncBtn">Sync now</button>
       <button type="button" class="secondary" id="installBtn" hidden>Install app</button>
+      <button type="button" class="secondary" id="signOutBtn">Sign out</button>
     </div>
     <p class="install" id="installHelp" hidden></p>
+
+    <details class="pw">
+      <summary>Change password</summary>
+      <form id="pwForm" novalidate>
+        <div class="field"><label for="pwOld">Current password</label><input type="password" id="pwOld" autocomplete="current-password"></div>
+        <div class="field"><label for="pwNew">New password</label><input type="password" id="pwNew" autocomplete="new-password"><p class="hint">At least 8 characters. Your other phones will need to sign in again.</p></div>
+        <button type="submit" class="secondary">Change password</button>
+      </form>
+    </details>
+
+    <form method="dialog"><button class="primary" value="close">Done</button></form>
+  </div>
+</dialog>
+
+<!-- ===== Report level ===== -->
+<dialog id="reportDlg" aria-labelledby="reportTitle">
+  <form class="dialog-body" id="reportForm" novalidate>
+    <h2 id="reportTitle">Report level</h2>
+    <p class="lede" id="reportRun"></p>
+    <p class="hint" id="reportGaugeNote" hidden></p>
+    <div class="field">
+      <label for="rLevel">Level you read</label>
+      <div class="gauge">
+        <div class="staff" aria-hidden="true"></div>
+        <div class="gauge-main">
+          <input type="text" id="rLevel" class="gauge-input" inputmode="decimal" placeholder="0.0" autocomplete="off">
+          <div class="units" role="group" aria-label="Level unit" data-for="report">
+            <button type="button" data-unit="ft">ft</button>
+            <button type="button" data-unit="cfs">cfs</button>
+            <button type="button" data-unit="">No unit</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="field">
+      <label for="rNote">Note <span class="opt">(optional)</span></label>
+      <input type="text" id="rNote" placeholder="Read at the bridge pier, dropping" autocomplete="off">
+    </div>
+    <fieldset class="field">
+      <legend>Who sees your name and note</legend>
+      <div class="seg">
+        <label><input type="radio" name="repVis" value="everyone"> All members</label>
+        <label><input type="radio" name="repVis" value="private"> Only me</label>
+      </div>
+      <p class="hint">The level itself is always shared.</p>
+    </fieldset>
+    <div class="dialog-actions">
+      <button type="submit" class="primary">Save level</button>
+      <button type="button" class="secondary" id="reportCancel">Cancel</button>
+    </div>
   </form>
 </dialog>
 
@@ -434,35 +651,39 @@ dialog .lede { margin: 0 0 18px; color: var(--muted); }
   var CONFIG = window.RIVER_BETA_CONFIG || {};
   var CONNECTED = /^https:\/\/script\.google\.com\/.+\/exec/.test(CONFIG.scriptUrl || "");
   var NEW = "__new__";
+  var STALE_HOURS = 6;
+  var EMPTY = { rivers: [], sections: {}, boats: [], gauges: [], flows: { readings: {} }, reports: [], hazards: [], trips: [] };
 
   var state = {
-    data: { rivers: [], sections: {}, boats: [], trips: [] },
+    auth: null,                 // { token, me: { email, name } }
+    data: EMPTY,
     outbox: [],
     settings: {},
+    favorites: [],
     lastSync: null,
     syncing: false,
     offline: false,
-    unit: "ft",
+    unit: { trip: "ft", report: "ft" },
     shown: 100,
-    installPrompt: null
+    flowsMode: "fav",
+    reportRun: null,
+    installPrompt: null,
+    authMode: "signin"
   };
 
   var $ = function (id) { return document.getElementById(id); };
-  var el = {
-    form: $("tripForm"), date: $("date"),
-    river: $("river"), riverNew: $("riverNew"), riverHint: $("riverHint"),
-    section: $("section"), sectionNew: $("sectionNew"), sectionHint: $("sectionHint"),
-    level: $("level"), betaLine: $("betaLine"),
-    boat: $("boat"), boatNew: $("boatNew"), notes: $("notes"),
-    search: $("search"), fRiver: $("fRiver"), fSection: $("fSection"), fBoat: $("fBoat"), clearFilters: $("clearFilters"),
-    tripList: $("tripList"), tripCount: $("tripCount"), moreBtn: $("moreBtn"),
-    statusBtn: $("statusBtn"), statusText: $("statusText"),
-    settings: $("settings"), settingsForm: $("settingsForm"), name: $("name"), passcode: $("passcode"),
-    settingsTitle: $("settingsTitle"), settingsLede: $("settingsLede"),
-    infoWaiting: $("infoWaiting"), infoLast: $("infoLast"),
-    syncBtn: $("syncBtn"), installBtn: $("installBtn"), installHelp: $("installHelp"),
-    toast: $("toast")
-  };
+  var el = {};
+  ["authView", "authForm", "authError", "aName", "aEmail", "aPass", "aCode", "authSubmit", "modeSignin", "modeSignup",
+   "appView", "tripForm", "date", "river", "riverNew", "riverHint", "section", "sectionNew", "sectionHint", "level", "betaLine",
+   "boat", "boatNew", "notes", "hazardToggle", "hazardBox", "hazardRemove", "hzType", "hzWhere", "hzDetails",
+   "showFav", "showAll", "flowFilters", "flRiver", "flSection", "flowFresh", "flowCountRow", "flowCount", "flowClear", "runList",
+   "search", "fRiver", "fSection", "fBoat", "clearFilters", "tripList", "tripCount", "moreBtn",
+   "statusBtn", "statusText", "settings", "whoami", "infoWaiting", "infoLast", "syncBtn", "installBtn", "installHelp", "signOutBtn",
+   "pwForm", "pwOld", "pwNew", "reportDlg", "reportForm", "reportRun", "reportGaugeNote", "rLevel", "rNote", "reportCancel", "toast"
+  ].forEach(function (id) { el[id] = $(id); });
+
+  var ICON_WARN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 20h20L12 3z"/><path d="M12 10v4M12 17v.5" stroke-linecap="round"/></svg>';
+  var ICON_STAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.25 4.1 1 5.8L12 16.8l-5.25 2.8 1-5.8L3.5 9.7l5.9-.9L12 3.5z"/></svg>';
 
   /* ---------- Helpers ---------- */
   function esc(s) {
@@ -472,12 +693,14 @@ dialog .lede { margin: 0 0 18px; color: var(--muted); }
   }
   function lower(s) { return String(s || "").trim().toLowerCase(); }
   function byName(a, b) { return a.toLowerCase().localeCompare(b.toLowerCase()); }
-  function today() { return new Date().toLocaleDateString("en-CA"); } // yyyy-mm-dd, local time
+  function runKey(river, section) { return lower(river) + "|" + lower(section); }
+  function today() { return new Date().toLocaleDateString("en-CA"); }
   function uuid() {
     if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
     return Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
   }
-  // Turns any date the sheet might hold (2024-09-12, 09-12-24, 9/12/2024, full timestamps) into yyyy-mm-dd
+  function pad(n) { return ("0" + n).slice(-2); }
+  // Turns any date the sheet might hold (2024-09-12, 09-12-24, 9/12/2024, timestamps) into yyyy-mm-dd
   function dateKey(d) {
     var s = String(d || "").trim(), m;
     if (!s) return "";
@@ -489,20 +712,28 @@ dialog .lede { margin: 0 0 18px; color: var(--muted); }
     var t = new Date(s);
     return isNaN(t) ? "" : t.toLocaleDateString("en-CA");
   }
-  function pad(n) { return ("0" + n).slice(-2); }
   function niceDate(d) {
-    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey(d) || "");
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey(d));
     if (!m) return d || "";
     return new Date(+m[1], +m[2] - 1, +m[3]).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
   }
   function timeAgo(iso) {
     if (!iso) return "never";
-    var mins = Math.round((Date.now() - new Date(iso)) / 60000);
+    var t = new Date(iso);
+    if (isNaN(t)) return "";
+    var mins = Math.round((Date.now() - t) / 60000);
     if (mins < 1) return "just now";
     if (mins < 60) return mins + " min ago";
     var hrs = Math.round(mins / 60);
     if (hrs < 24) return hrs + (hrs === 1 ? " hour ago" : " hours ago");
-    return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    var days = Math.round(hrs / 24);
+    if (days < 8) return days + (days === 1 ? " day ago" : " days ago");
+    return t.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
+  function hoursSince(iso) { var t = new Date(iso); return isNaN(t) ? Infinity : (Date.now() - t) / 3600000; }
+  function fmtNum(n) {
+    if (n === null || n === undefined || isNaN(n)) return "";
+    return n >= 100 ? Math.round(n).toLocaleString() : String(Math.round(n * 100) / 100);
   }
   function levenshtein(a, b) {
     if (!a.length) return b.length;
@@ -511,18 +742,23 @@ dialog .lede { margin: 0 0 18px; color: var(--muted); }
     for (j = 0; j <= b.length; j++) prev[j] = j;
     for (i = 1; i <= a.length; i++) {
       var cur = [i];
-      for (j = 1; j <= b.length; j++) {
-        cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
-      }
+      for (j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
       prev = cur;
     }
     return prev[b.length];
   }
+  // "6.2 ft" -> { num: "6.2", value: 6.2, unit: "ft" }
   function splitLevel(level) {
-    var m = /^(-?\d+(?:[.,]\d+)?)\s*(.*)$/.exec(String(level || "").trim());
-    if (m) return { num: m[1], unit: m[2], text: false };
-    return { num: level || "—", unit: "", text: !!level };
+    var m = /^(-?[\d,]*\.?\d+)\s*(.*)$/.exec(String(level || "").trim());
+    if (m) {
+      var unit = lower(m[2]);
+      if (/cfs|ft3|cubic/.test(unit)) unit = "cfs"; else if (/^(ft|feet|')$/.test(unit)) unit = "ft";
+      return { num: m[1], value: Number(m[1].replace(/,/g, "")), unit: unit, text: false };
+    }
+    return { num: level || "—", value: null, unit: "", text: !!level };
   }
+  function vis(name) { var c = document.querySelector('input[name="' + name + '"]:checked'); return c ? c.value : "everyone"; }
+  function setVis(name, v) { var r = document.querySelector('input[name="' + name + '"][value="' + (v === "private" ? "private" : "everyone") + '"]'); if (r) r.checked = true; }
 
   var toastTimer;
   function toast(msg, ms) {
@@ -533,20 +769,20 @@ dialog .lede { margin: 0 0 18px; color: var(--muted); }
   }
 
   /* ---------- Lists (server data + anything added offline) ---------- */
+  function pendingOf(kind) { return state.outbox.filter(function (o) { return (o.kind || "trip") === kind; }); }
+
   function lists() {
-    var sections = {};
-    var riverKeys = {};
+    var sections = {}, riverKeys = {};
     function addRiver(r) {
       var k = lower(r);
       if (!k) return null;
-      if (!riverKeys[k]) { riverKeys[k] = r.trim(); sections[riverKeys[k]] = []; }
+      if (!riverKeys[k]) { riverKeys[k] = String(r).trim(); sections[riverKeys[k]] = []; }
       return riverKeys[k];
     }
     function addSection(r, s) {
       var name = addRiver(r);
       if (!name || !lower(s)) return;
-      var have = sections[name].some(function (x) { return lower(x) === lower(s); });
-      if (!have) sections[name].push(s.trim());
+      if (!sections[name].some(function (x) { return lower(x) === lower(s); })) sections[name].push(String(s).trim());
     }
     state.data.rivers.forEach(function (r) {
       addRiver(r);
@@ -554,8 +790,9 @@ dialog .lede { margin: 0 0 18px; color: var(--muted); }
     });
     var boats = state.data.boats.slice();
     state.outbox.forEach(function (t) {
-      addSection(t.river, t.section);
+      if (!t.river) return;
       addRiver(t.river);
+      addSection(t.river, t.section);
       if (t.boat && !boats.some(function (b) { return lower(b) === lower(t.boat); })) boats.push(t.boat);
     });
     var rivers = Object.keys(sections).sort(byName);
@@ -564,13 +801,13 @@ dialog .lede { margin: 0 0 18px; color: var(--muted); }
   }
 
   function allTrips() {
+    var me = state.auth ? state.auth.me : {};
     var pendingIds = {};
-    var pending = state.outbox.map(function (t) {
+    var pending = pendingOf("trip").map(function (t) {
       pendingIds[t.id] = true;
-      return Object.assign({ pending: true }, t);
+      return Object.assign({}, t, { pending: true, mine: true, paddler: me.name || "", private: t.visibility === "private" });
     });
     var synced = state.data.trips.filter(function (t) { return !pendingIds[t.id]; });
-    // Newest first. Same-day trips: most recently logged first. Trips with no readable date go last.
     return pending.concat(synced).map(function (t, i) {
       return Object.assign({}, t, { sortKey: dateKey(t.date), order: i });
     }).sort(function (a, b) {
@@ -585,7 +822,98 @@ dialog .lede { margin: 0 0 18px; color: var(--muted); }
     });
   }
 
-  /* ---------- Dropdowns ---------- */
+  function activeHazards() {
+    var cleared = {};
+    pendingOf("clear").forEach(function (c) { cleared[c.hazardId] = true; });
+    var list = state.data.hazards.filter(function (h) { return !cleared[h.id]; });
+    pendingOf("trip").forEach(function (t) {
+      if (t.hazard && t.hazard.type && !cleared[t.hazard.id]) {
+        list.unshift(Object.assign({ river: t.river, section: t.section, time: t.createdAt, tripId: t.id, mine: true, pending: true,
+          reporter: state.auth ? state.auth.me.name : "" }, t.hazard));
+      }
+    });
+    return list;
+  }
+
+  function findGauge(river, section) {
+    var r = lower(river), s = lower(section), riverWide = null;
+    var gs = state.data.gauges || [];
+    for (var i = 0; i < gs.length; i++) {
+      if (lower(gs[i].river) !== r) continue;
+      if (lower(gs[i].section) === s) return gs[i];
+      if (!gs[i].section) riverWide = gs[i];
+    }
+    return riverWide;
+  }
+
+  // Latest level a member read by eye (level reports, plus trips that logged a level)
+  function latestMemberLevel(river, section) {
+    var k = runKey(river, section), best = null;
+    function consider(c) { if (!best || c.time > best.time) best = c; }
+    state.data.reports.concat(pendingOf("report")).forEach(function (r) {
+      if (runKey(r.river, r.section) !== k || !r.level) return;
+      consider({ level: r.level, time: r.time || r.createdAt, who: r.pending || r.kind ? (state.auth ? state.auth.me.name : "") : r.paddler, note: r.note, pending: !!r.kind });
+    });
+    allTrips().forEach(function (t) {
+      if (runKey(t.river, t.section) !== k || !t.level) return;
+      var stamp = t.createdAt || t.loggedAt || "";
+      var time = stamp && dateKey(stamp) === t.sortKey ? stamp : (t.sortKey ? t.sortKey + "T12:00:00" : "");
+      consider({ level: t.level, time: time, who: t.paddler, note: "", pending: !!t.pending, fromTrip: true });
+    });
+    return best;
+  }
+
+  function gaugeReading(g) {
+    if (!g || g.source !== "usgs" || !g.gaugeId) return null;
+    var site = ((state.data.flows || {}).readings || {})[g.gaugeId];
+    if (!site) return null;
+    var unit = g.units || (site.cfs ? "cfs" : "ft");
+    var r = site[unit] || site.cfs || site.ft;
+    if (!r) return null;
+    return { value: r.value, unit: site[unit] ? unit : (site.cfs ? "cfs" : "ft"), time: r.time };
+  }
+
+  function band(g, value, unit) {
+    if (!g || value === null || value === undefined || isNaN(value)) return null;
+    if (g.units && unit && g.units !== unit) return null;
+    var lo = g.low, il = g.idealLow, ih = g.idealHigh, hi = g.high;
+    if ([lo, il, ih, hi].every(function (x) { return x === null || x === undefined; })) return null;
+    if (lo != null && value < lo) return { key: "toolow", label: "Too low" };
+    if (hi != null && value > hi) return { key: "toohigh", label: "Too high" };
+    if (il != null && value < il) return { key: "low", label: "Low" };
+    if (ih != null && value > ih) return { key: "high", label: "High" };
+    if (il != null || ih != null) return { key: "good", label: "Good" };
+    return { key: "runnable", label: "Runnable" };
+  }
+
+  function rangeBar(g, value) {
+    var marks = [g.low, g.idealLow, g.idealHigh, g.high].filter(function (x) { return x !== null && x !== undefined; });
+    if (marks.length < 2) return "";
+    var min = Math.min.apply(null, marks), max = Math.max.apply(null, marks);
+    var span = (max - min) || max || 1;
+    var d0 = Math.max(0, min - span * 0.3), d1 = max + span * 0.3;
+    if (value != null && !isNaN(value)) { d0 = Math.min(d0, value); d1 = Math.max(d1, value); }
+    var pos = function (v) { return ((v - d0) / (d1 - d0)) * 100; };
+    var segs = [], last = d0;
+    var colors = { toolow: "var(--b-toolow)", low: "var(--b-low)", good: "var(--b-good)", runnable: "var(--b-good)", high: "var(--b-high)", toohigh: "var(--b-toohigh)" };
+    // each threshold closes the band below it
+    var bands = [];
+    if (g.low != null) bands.push({ to: g.low, cls: "toolow" });
+    if (g.idealLow != null) bands.push({ to: g.idealLow, cls: g.low != null ? "low" : "toolow" });
+    if (g.idealHigh != null) bands.push({ to: g.idealHigh, cls: g.idealLow != null ? "good" : (g.low != null ? "runnable" : "toolow") });
+    if (g.high != null) bands.push({ to: g.high, cls: g.idealHigh != null ? "high" : (g.idealLow != null ? "good" : "runnable") });
+    bands.push({ to: d1, cls: g.high != null ? "toohigh" : "high" });
+    bands.forEach(function (b) {
+      var w = pos(b.to) - pos(last);
+      if (w > 0) segs.push('<span style="width:' + w.toFixed(2) + '%;background:' + colors[b.cls] + '"></span>');
+      last = b.to;
+    });
+    var marker = value != null && !isNaN(value) ? '<i class="marker" style="left:' + pos(value).toFixed(2) + '%"></i>' : "";
+    var ticks = marks.map(function (m) { return '<span style="left:' + pos(m).toFixed(2) + '%">' + esc(fmtNum(m)) + "</span>"; }).join("");
+    return '<div class="range" aria-hidden="true"><div class="range-bar">' + segs.join("") + marker + '</div><div class="range-ticks">' + ticks + "</div></div>";
+  }
+
+  /* ---------- Log trip: dropdowns ---------- */
   function fillSelect(select, items, placeholder, addLabel, keep) {
     var html = '<option value="">' + esc(placeholder) + "</option>";
     items.forEach(function (it) { html += '<option value="' + esc(it) + '">' + esc(it) + "</option>"; });
@@ -593,37 +921,27 @@ dialog .lede { margin: 0 0 18px; color: var(--muted); }
     select.innerHTML = html;
     if (keep && (items.indexOf(keep) !== -1 || keep === NEW)) select.value = keep;
   }
-
-  function chosen(select, input) {
-    return select.value === NEW ? input.value.trim() : select.value;
-  }
-
-  function renderPickers() {
-    var L = lists();
-    var river = el.river.value;
-    fillSelect(el.river, L.rivers, "Choose a river", "+ Add a new river", river);
-    renderSections();
-    var boat = el.boat.value || state.settings.lastBoat || "";
-    fillSelect(el.boat, L.boats, "Choose a boat", "+ Add a new boat", boat);
-    toggleNew(el.boat, el.boatNew);
-  }
-
-  function renderSections() {
-    var L = lists();
-    var river = el.river.value;
-    var keep = el.section.value;
-    var items = river && river !== NEW ? (L.sections[river] || []) : [];
-    fillSelect(el.section, items, items.length ? "Choose a section" : "No section", "+ Add a new section", keep);
-    toggleNew(el.section, el.sectionNew);
-  }
-
+  function chosen(select, input) { return select.value === NEW ? input.value.trim() : select.value; }
   function toggleNew(select, input) {
     var isNew = select.value === NEW;
     input.hidden = !isNew;
     if (!isNew) input.value = "";
   }
-
-  // "Did you mean…?" so the sheet doesn't fill up with near-duplicate names
+  function renderPickers() {
+    var L = lists();
+    fillSelect(el.river, L.rivers, "Choose a river", "+ Add a new river", el.river.value);
+    renderSections();
+    var boat = el.boat.value || state.settings.lastBoat || "";
+    fillSelect(el.boat, L.boats, "Choose a boat", "+ Add a new boat", boat);
+    toggleNew(el.boat, el.boatNew);
+  }
+  function renderSections() {
+    var L = lists();
+    var river = el.river.value;
+    var items = river && river !== NEW ? (L.sections[river] || []) : [];
+    fillSelect(el.section, items, items.length ? "Choose a section" : "No section", "+ Add a new section", el.section.value);
+    toggleNew(el.section, el.sectionNew);
+  }
   function similarCheck(value, existing, hintEl, onPick) {
     var v = lower(value);
     hintEl.hidden = true;
@@ -637,32 +955,241 @@ dialog .lede { margin: 0 0 18px; color: var(--muted); }
     hintEl.querySelector("button").onclick = function () { hintEl.hidden = true; onPick(close); };
   }
 
+  // What the crew knows about the run you picked: current flow, hazards, last trip
   function renderBeta() {
     var river = chosen(el.river, el.riverNew);
     var section = chosen(el.section, el.sectionNew);
-    if (!river) { el.betaLine.textContent = ""; return; }
+    if (!river) { el.betaLine.innerHTML = ""; return; }
+    var parts = [];
+    var g = findGauge(river, section);
+    var r = gaugeReading(g);
+    if (r) {
+      var b = band(g, r.value, r.unit);
+      parts.push("Gauge now <strong>" + esc(fmtNum(r.value) + " " + r.unit) + "</strong>" + (b ? " (" + b.label.toLowerCase() + ")" : "") + ".");
+    }
+    var hz = activeHazards().filter(function (h) { return runKey(h.river, h.section) === runKey(river, section); });
+    if (hz.length) parts.push('<span class="warn">' + hz.length + (hz.length === 1 ? " active hazard: " : " active hazards: ") + esc(hz.map(function (h) { return h.type; }).join(", ")) + ".</span>");
     var matches = allTrips().filter(function (t) {
       return lower(t.river) === lower(river) && (!section || lower(t.section) === lower(section));
     });
     var place = section ? "this run" : "this river";
-    if (!matches.length) { el.betaLine.textContent = "First trip logged on " + place + "."; return; }
-    var withLevel = matches.filter(function (t) { return t.level; })[0];
-    var last = withLevel || matches[0];
-    var who = last.paddler ? " by " + esc(last.paddler) : "";
-    var lvl = withLevel ? "Last logged at <strong>" + esc(withLevel.level) + "</strong> on " : "Last paddled ";
-    el.betaLine.innerHTML = lvl + esc(niceDate(last.date)) + who + ". " +
-      matches.length + (matches.length === 1 ? " trip" : " trips") + " on " + place + ".";
+    if (!matches.length) parts.push("First trip logged on " + place + ".");
+    else {
+      var withLevel = matches.filter(function (t) { return t.level; })[0];
+      var last = withLevel || matches[0];
+      var who = last.paddler ? " by " + esc(last.paddler) : "";
+      parts.push((withLevel ? "Last logged at <strong>" + esc(withLevel.level) + "</strong> on " : "Last paddled ") +
+        esc(niceDate(last.date)) + who + ". " + matches.length + (matches.length === 1 ? " trip" : " trips") + " on " + place + ".");
+    }
+    el.betaLine.innerHTML = parts.join(" ");
   }
 
-  function setUnit(u) {
-    state.unit = u;
-    document.querySelectorAll(".units button").forEach(function (b) {
+  function setUnit(which, u) {
+    state.unit[which] = u;
+    document.querySelectorAll('.units[data-for="' + which + '"] button').forEach(function (b) {
       b.setAttribute("aria-pressed", String(b.dataset.unit === u));
     });
   }
 
+  function openHazard(open) {
+    el.hazardBox.hidden = !open;
+    el.hazardToggle.hidden = open;
+    el.hazardToggle.setAttribute("aria-expanded", String(open));
+    if (open) el.hzType.focus();
+    else { el.hzType.value = ""; el.hzWhere.value = ""; el.hzDetails.value = ""; el.hzType.removeAttribute("aria-invalid"); }
+  }
+
+  /* ---------- Flows ---------- */
+  function allRuns() {
+    var L = lists(), runs = [];
+    L.rivers.forEach(function (r) {
+      var secs = L.sections[r];
+      if (!secs.length) runs.push({ river: r, section: "" });
+      secs.forEach(function (s) { runs.push({ river: r, section: s }); });
+    });
+    return runs;
+  }
+
+  function renderFlowFilters(runs) {
+    var keepR = el.flRiver.value, keepS = el.flSection.value;
+    var rivers = [];
+    runs.forEach(function (r) { if (rivers.indexOf(r.river) === -1) rivers.push(r.river); });
+    el.flRiver.innerHTML = '<option value="">All rivers</option>' + rivers.map(function (r) {
+      return '<option value="' + esc(r) + '">' + esc(r) + "</option>";
+    }).join("");
+    el.flRiver.value = rivers.indexOf(keepR) !== -1 ? keepR : "";
+    var river = el.flRiver.value;
+    var secs = runs.filter(function (r) { return r.section && (!river || r.river === river); });
+    el.flSection.innerHTML = '<option value="">' + (secs.length ? "All sections" : "No sections") + "</option>" + secs.map(function (r) {
+      var k = runKey(r.river, r.section);
+      return '<option value="' + esc(k) + '">' + esc(r.section) + (river ? "" : " (" + esc(r.river) + ")") + "</option>";
+    }).join("");
+    el.flSection.value = secs.some(function (r) { return runKey(r.river, r.section) === keepS; }) ? keepS : "";
+    el.flSection.disabled = !secs.length;
+  }
+
+  function renderFlows() {
+    var fav = state.flowsMode === "fav";
+    el.showFav.setAttribute("aria-pressed", String(fav));
+    el.showAll.setAttribute("aria-pressed", String(!fav));
+    el.flowFilters.hidden = fav;
+
+    var runs = allRuns();
+    var favSet = {};
+    state.favorites.forEach(function (k) { favSet[k] = true; });
+    var list;
+    if (fav) {
+      list = runs.filter(function (r) { return favSet[runKey(r.river, r.section)]; });
+      el.flowCountRow.hidden = true;
+    } else {
+      renderFlowFilters(runs);
+      var fr = el.flRiver.value, fs = el.flSection.value;
+      list = runs.filter(function (r) {
+        if (fr && r.river !== fr) return false;
+        if (fs && runKey(r.river, r.section) !== fs) return false;
+        return true;
+      });
+      el.flRiver.closest(".field").classList.toggle("active", !!fr);
+      el.flSection.closest(".field").classList.toggle("active", !!fs);
+      el.flowCountRow.hidden = false;
+      el.flowCount.textContent = list.length + (list.length === 1 ? " run" : " runs") + ((fr || fs) ? " of " + runs.length : "");
+      el.flowClear.hidden = !(fr || fs);
+    }
+
+    var flows = state.data.flows || {};
+    var fresh = flows.fetchedAt ? "Gauge readings downloaded " + timeAgo(flows.fetchedAt) + "." : "";
+    if (flows.error) fresh = flows.error;
+    if (state.offline && fresh) fresh = "No service. " + fresh;
+    el.flowFresh.textContent = fresh;
+    el.flowFresh.classList.toggle("stale", !!flows.error || (flows.fetchedAt && hoursSince(flows.fetchedAt) > STALE_HOURS));
+    el.flowFresh.hidden = !fresh;
+
+    if (!list.length) {
+      el.runList.innerHTML = '<li class="empty">' + (fav
+        ? 'No favorites yet. Open <button type="button" class="link" data-go="all">All rivers</button> and tap the star on the runs you paddle.'
+        : runs.length ? "No runs match these filters." : "No rivers yet. They appear here once they're in your sheet or a trip is logged.") + "</li>";
+      return;
+    }
+
+    var hazards = activeHazards();
+    el.runList.innerHTML = list.map(function (run) {
+      var k = runKey(run.river, run.section);
+      var g = findGauge(run.river, run.section);
+      var official = gaugeReading(g);
+      var member = latestMemberLevel(run.river, run.section);
+      var primary = null, sourceLine = "", stale = false;
+
+      if (official) {
+        primary = { value: official.value, unit: official.unit, text: fmtNum(official.value) };
+        stale = hoursSince(official.time) > STALE_HOURS;
+        sourceLine = "USGS gauge " + esc(g.gaugeId.replace(/^USGS-/, "")) + ", read " + esc(timeAgo(official.time));
+      } else if (member) {
+        var lv = splitLevel(member.level);
+        primary = { value: lv.value, unit: lv.unit, text: lv.text ? member.level : lv.num };
+        stale = hoursSince(member.time) > 48;
+        sourceLine = (g && g.source === "visual" ? "Visual gauge" : "Member report") + ", " +
+          (member.who ? esc(member.who) + ", " : "") + esc(timeAgo(member.time)) + (member.pending ? " (waiting to upload)" : "");
+      } else if (g && g.source === "usgs") {
+        sourceLine = "USGS gauge " + esc(g.gaugeId.replace(/^USGS-/, "")) + ": no reading downloaded yet";
+      } else if (g && g.source === "visual") {
+        sourceLine = "Visual gauge: no one has reported a level yet";
+      } else {
+        sourceLine = "No gauge set up for this run yet";
+      }
+
+      var b = primary ? band(g, primary.value, primary.unit || (g && g.units)) : null;
+      var reading = primary
+        ? '<span class="num">' + esc(primary.text) + '</span><span class="unit">' + esc(primary.unit || "") + "</span>" +
+          (b ? '<span class="band ' + b.key + '">' + b.label + "</span>" : "")
+        : '<span class="none">No current level</span>';
+
+      // When the gauge is official, also show what members read by eye
+      var memberLine = "";
+      if (official && member && hoursSince(member.time) < 24 * 14) {
+        memberLine = '<p class="member-line">Member read <strong>' + esc(member.level) + '</strong> <span class="who">' +
+          (member.who ? esc(member.who) + ", " : "") + esc(timeAgo(member.time)) + "</span></p>";
+      }
+
+      var hz = hazards.filter(function (h) { return runKey(h.river, h.section) === k; }).map(function (h) {
+        return '<div class="hz"><p class="hz-title">' + ICON_WARN + esc(h.type) + "</p>" +
+          (h.where ? "<p>" + esc(h.where) + "</p>" : "") +
+          (h.details ? "<p>" + esc(h.details) + "</p>" : "") +
+          '<p class="meta">Reported ' + esc(timeAgo(h.time)) + (h.reporter ? " by " + esc(h.reporter) : "") + (h.pending ? ", waiting to upload" : "") + "</p>" +
+          (h.pending ? "" : '<button type="button" class="link" data-clear="' + esc(h.id) + '">Mark cleared</button>') + "</div>";
+      }).join("");
+
+      return '<li class="run">' +
+        '<div class="run-top"><div><h3>' + esc(run.river) + "</h3>" + (run.section ? '<p class="section">' + esc(run.section) + "</p>" : "") + "</div>" +
+        '<button type="button" class="star" data-fav="' + esc(k) + '" aria-pressed="' + (favSet[k] ? "true" : "false") + '" aria-label="Favorite ' +
+        esc(run.river + (run.section ? " " + run.section : "")) + '">' + ICON_STAR + "</button></div>" +
+        '<div class="reading">' + reading + "</div>" +
+        '<p class="source' + (stale ? " stale" : "") + '">' + sourceLine + (stale ? " (old reading)" : "") + "</p>" +
+        (g && primary !== null ? rangeBar(g, b ? primary.value : null) : (g ? rangeBar(g, null) : "")) +
+        memberLine +
+        (g && g.notes ? '<p class="gauge-note">' + esc(g.notes) + "</p>" : "") +
+        hz +
+        '<div class="run-actions"><button type="button" class="secondary" data-report="' + esc(k) + '">Report level</button></div>' +
+        "</li>";
+    }).join("");
+  }
+
+  async function toggleFavorite(k) {
+    var i = state.favorites.indexOf(k);
+    if (i === -1) state.favorites.push(k); else state.favorites.splice(i, 1);
+    await RB.db.put("kv", state.favorites, "favorites");
+    renderFlows();
+  }
+
+  function openReport(k) {
+    var run = allRuns().filter(function (r) { return runKey(r.river, r.section) === k; })[0];
+    if (!run) return;
+    state.reportRun = run;
+    var g = findGauge(run.river, run.section);
+    el.reportRun.textContent = run.river + (run.section ? ", " + run.section : "");
+    el.reportGaugeNote.hidden = !(g && g.notes);
+    el.reportGaugeNote.textContent = g && g.notes ? "Where to read it: " + g.notes : "";
+    el.rLevel.value = "";
+    el.rNote.value = "";
+    setUnit("report", g && g.units ? g.units : (state.settings.reportUnit !== undefined ? state.settings.reportUnit : "ft"));
+    setVis("repVis", state.settings.visibility);
+    el.reportDlg.showModal();
+    el.rLevel.focus();
+  }
+
+  async function saveReport(e) {
+    e.preventDefault();
+    var lvl = el.rLevel.value.trim();
+    if (!lvl) { el.rLevel.closest(".gauge").setAttribute("aria-invalid", "true"); el.rLevel.focus(); return; }
+    el.rLevel.closest(".gauge").removeAttribute("aria-invalid");
+    if (state.unit.report && /^-?\d+(?:[.,]\d+)?$/.test(lvl)) lvl += " " + state.unit.report;
+    var run = state.reportRun;
+    var report = {
+      kind: "report", id: uuid(), river: run.river, section: run.section, level: lvl,
+      note: el.rNote.value.trim(), visibility: vis("repVis"), time: new Date().toISOString(), createdAt: new Date().toISOString()
+    };
+    await RB.db.put("outbox", report);
+    state.settings.visibility = report.visibility;
+    state.settings.reportUnit = state.unit.report;
+    await RB.db.put("kv", state.settings, "settings");
+    state.outbox = await RB.db.all("outbox");
+    el.reportDlg.close();
+    renderAll();
+    toast("Level saved on this phone.");
+    afterQueue(report.id, "Level saved. It will upload when you have service.");
+  }
+
+  async function clearHazard(id) {
+    var h = activeHazards().filter(function (x) { return x.id === id; })[0];
+    if (!h || !window.confirm("Mark “" + h.type + "” on " + h.river + " as cleared? It will disappear for everyone.")) return;
+    var item = { kind: "clear", id: uuid(), hazardId: id, time: new Date().toISOString(), createdAt: new Date().toISOString() };
+    await RB.db.put("outbox", item);
+    state.outbox = await RB.db.all("outbox");
+    renderAll();
+    toast("Hazard marked cleared.");
+    afterQueue(item.id, "Hazard marked cleared. It will upload when you have service.");
+  }
+
   /* ---------- History ---------- */
-  // Filter choices come from trips actually logged, so every option returns results
   function uniqueSorted(values) {
     var seen = {}, out = [];
     values.forEach(function (v) {
@@ -671,7 +1198,6 @@ dialog .lede { margin: 0 0 18px; color: var(--muted); }
     });
     return out.sort(byName);
   }
-
   function fillFilter(select, items, allLabel) {
     var keep = select.value;
     select.innerHTML = '<option value="">' + esc(allLabel) + "</option>" + items.map(function (it) {
@@ -680,28 +1206,23 @@ dialog .lede { margin: 0 0 18px; color: var(--muted); }
     var match = items.filter(function (it) { return lower(it) === lower(keep); })[0];
     select.value = match || "";
   }
-
-  function renderFilters(trips) {
+  function renderHistoryFilters(trips) {
     fillFilter(el.fRiver, uniqueSorted(trips.map(function (t) { return t.river; })), "All rivers");
     var river = lower(el.fRiver.value);
-    var sections = river ? uniqueSorted(trips.filter(function (t) { return lower(t.river) === river; })
-      .map(function (t) { return t.section; })) : [];
+    var sections = river ? uniqueSorted(trips.filter(function (t) { return lower(t.river) === river; }).map(function (t) { return t.section; })) : [];
     fillFilter(el.fSection, sections, river ? (sections.length ? "All sections" : "No sections logged") : "Pick a river first");
     el.fSection.disabled = !river || !sections.length;
     fillFilter(el.fBoat, uniqueSorted(trips.map(function (t) { return t.boat; })), "All boats");
   }
-
   function renderHistory() {
     var everything = allTrips();
-    renderFilters(everything);
-
+    renderHistoryFilters(everything);
     var f = { river: lower(el.fRiver.value), section: lower(el.fSection.value), boat: lower(el.fBoat.value), q: lower(el.search.value) };
-    [[el.fRiver, f.river], [el.fSection, f.section], [el.fBoat, f.boat], [el.search, f.q]].forEach(function (pair) {
-      pair[0].closest(".field").classList.toggle("active", !!pair[1]);
+    [[el.fRiver, f.river], [el.fSection, f.section], [el.fBoat, f.boat], [el.search, f.q]].forEach(function (p) {
+      p[0].closest(".field").classList.toggle("active", !!p[1]);
     });
     var filtering = !!(f.river || f.section || f.boat || f.q);
     el.clearFilters.hidden = !filtering;
-
     var trips = everything.filter(function (t) {
       if (f.river && lower(t.river) !== f.river) return false;
       if (f.section && lower(t.section) !== f.section) return false;
@@ -709,31 +1230,35 @@ dialog .lede { margin: 0 0 18px; color: var(--muted); }
       if (f.q && lower(t.notes).indexOf(f.q) === -1) return false;
       return true;
     });
-
     if (!trips.length) {
-      el.tripList.innerHTML = '<li class="empty">' + (filtering
-        ? "No trips match these filters."
-        : "No trips yet. Log your first one on the Log trip tab.") + "</li>";
+      el.tripList.innerHTML = '<li class="empty">' + (filtering ? "No trips match these filters." : "No trips yet. Log your first one on the Log trip tab.") + "</li>";
       el.tripCount.textContent = "";
       el.moreBtn.hidden = true;
       return;
     }
-
-    el.tripCount.textContent = trips.length + (trips.length === 1 ? " trip" : " trips") +
-      (filtering ? " of " + everything.length : "");
+    var hazardByTrip = {};
+    state.data.hazards.forEach(function (h) { if (h.tripId) hazardByTrip[h.tripId] = h; });
+    el.tripCount.textContent = trips.length + (trips.length === 1 ? " trip" : " trips") + (filtering ? " of " + everything.length : "");
     el.tripList.innerHTML = trips.slice(0, state.shown).map(function (t) {
       var lv = splitLevel(t.level);
       var meta = esc(niceDate(t.date));
       if (t.boat) meta += " in " + esc(t.boat);
       if (t.paddler) meta += ", " + esc(t.paddler);
+      var hz = t.hazard && t.hazard.type ? t.hazard : hazardByTrip[t.id];
+      var tags = [];
+      if (t.pending) tags.push('<span class="tag">Waiting to upload</span>');
+      if (hz) tags.push('<span class="tag hazard">Hazard: ' + esc(hz.type) + "</span>");
+      if (t.private && t.mine) tags.push('<span class="tag quiet">Only me</span>');
+      if (t.private && !t.mine) tags.push('<span class="tag quiet">Private trip</span>');
       return '<li class="trip' + (t.pending ? " pending" : "") + '">' +
         '<div class="trip-level"><span class="num' + (lv.text ? " text" : "") + '">' + esc(lv.num) + "</span>" +
         (lv.unit ? '<span class="unit">' + esc(lv.unit) + "</span>" : "") + "</div>" +
         "<div><h3>" + esc(t.river) + "</h3>" +
         (t.section ? '<p class="section">' + esc(t.section) + "</p>" : "") +
         '<p class="meta">' + meta + "</p>" +
+        (t.gauge ? '<p class="meta">USGS gauge: ' + esc(t.gauge) + "</p>" : "") +
         (t.notes ? '<p class="notes">' + esc(t.notes) + "</p>" : "") +
-        (t.pending ? '<span class="tag">Waiting to upload</span>' : "") +
+        (tags.length ? '<div class="tags">' + tags.join("") + "</div>" : "") +
         "</div></li>";
     }).join("");
     el.moreBtn.hidden = trips.length <= state.shown;
@@ -743,67 +1268,63 @@ dialog .lede { margin: 0 0 18px; color: var(--muted); }
   function renderStatus() {
     var n = state.outbox.length;
     var cls = "idle", text = "Up to date";
-    if (!CONNECTED) { text = "Not connected"; }
+    if (!CONNECTED) text = "Not connected";
     else if (state.syncing) { cls = "busy"; text = "Syncing"; }
     else if (n) { cls = "waiting"; text = n + " waiting to upload"; }
     else if (state.offline) { cls = "offline"; text = "Offline"; }
-    else if (state.lastSync) { cls = "ok"; }
+    else if (state.lastSync) cls = "ok";
     el.statusBtn.className = "status " + cls;
     el.statusText.textContent = text;
-
     el.infoWaiting.textContent = n
-      ? n + (n === 1 ? " trip is" : " trips are") + " saved on this phone, waiting to upload."
-      : "Every trip on this phone has been uploaded.";
+      ? n + (n === 1 ? " entry is" : " entries are") + " saved on this phone, waiting to upload."
+      : "Everything on this phone has been uploaded.";
     el.infoLast.textContent = "Last synced with the sheet: " + timeAgo(state.lastSync) + ".";
   }
 
   function renderAll() {
     renderPickers();
     renderBeta();
-    renderHistory();
+    if (!$("view-flows").hidden) renderFlows();
+    if (!$("view-history").hidden) renderHistory();
     renderStatus();
   }
 
   /* ---------- Talking to the sheet ---------- */
-  async function refresh() {
-    var key = encodeURIComponent(state.settings.passcode || "");
-    var t = RB.withTimeout(20000);
-    try {
-      var res = await fetch(CONFIG.scriptUrl + "?action=bootstrap&key=" + key, { signal: t.signal });
-      var json = await RB.readJson(res);
-      if (!json.ok) throw new Error(json.error || "Couldn't load the sheet.");
-      state.data = { rivers: json.rivers || [], sections: json.sections || {}, boats: json.boats || [], trips: json.trips || [] };
-      state.lastSync = new Date().toISOString();
-      await RB.db.put("kv", state.data, "data");
-      await RB.db.put("kv", state.lastSync, "lastSync");
-    } finally {
-      t.done();
-    }
+  function isNetworkError(err) {
+    return err && !err.auth && (err.name === "AbortError" || err.name === "TypeError" || /network|fetch|load failed/i.test(err.message));
   }
 
-  function isNetworkError(err) {
-    return err && (err.name === "AbortError" || err.name === "TypeError" || /network|fetch|load failed/i.test(err.message));
+  async function refresh() {
+    var json = await RB.call(CONFIG.scriptUrl, { action: "bootstrap", token: state.auth.token }, 25000);
+    state.data = {
+      rivers: json.rivers || [], sections: json.sections || {}, boats: json.boats || [], gauges: json.gauges || [],
+      flows: json.flows || { readings: {} }, reports: json.reports || [], hazards: json.hazards || [], trips: json.trips || []
+    };
+    if (json.me) { state.auth.me = json.me; await RB.db.put("kv", state.auth, "auth"); }
+    state.lastSync = new Date().toISOString();
+    await RB.db.put("kv", state.data, "data");
+    await RB.db.put("kv", state.lastSync, "lastSync");
   }
 
   async function syncNow(manual) {
-    if (!CONNECTED || state.syncing) return;
+    if (!CONNECTED || state.syncing || !state.auth) return;
     state.syncing = true;
     renderStatus();
     try {
       var result = await RB.uploadOutbox();
       state.outbox = await RB.db.all("outbox");
       if (result.sent) toast(result.sent === 1 ? "Trip uploaded to the sheet." : result.sent + " trips uploaded to the sheet.");
-      if (result.rejected.length) toast(result.rejected.length + " trip(s) were missing a river and weren't uploaded.", 5000);
+      else if (result.sentReports) toast("Level uploaded to the sheet.");
+      if (result.rejected.length) toast(result.rejected.length + " entries were missing a river or level and weren't uploaded.", 5000);
       await refresh();
       state.offline = false;
-      if (manual && !result.sent) toast("Up to date with the sheet.");
+      if (manual && !result.sent && !result.sentReports) toast("Up to date with the sheet.");
     } catch (err) {
-      if (isNetworkError(err)) {
+      if (err.auth) { await needSignIn("Please sign in again. Anything you saved offline is kept and uploads after you sign in."); }
+      else if (isNetworkError(err)) {
         state.offline = true;
-        if (manual) toast(state.outbox.length ? "No service right now. Trips stay saved here until it's back." : "No service right now.", 4000);
-      } else {
-        toast(err.message, 5000);
-      }
+        if (manual) toast(state.outbox.length ? "No service right now. Entries stay saved here until it's back." : "No service right now.", 4000);
+      } else toast(err.message, 5000);
     } finally {
       state.syncing = false;
       state.outbox = await RB.db.all("outbox");
@@ -813,9 +1334,14 @@ dialog .lede { margin: 0 0 18px; color: var(--muted); }
 
   function askForBackgroundSync() {
     if (!("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.ready.then(function (reg) {
-      if (reg.sync) return reg.sync.register("rb-outbox");
-    }).catch(function () {});
+    navigator.serviceWorker.ready.then(function (reg) { if (reg.sync) return reg.sync.register("rb-outbox"); }).catch(function () {});
+  }
+
+  async function afterQueue(id, offlineMsg) {
+    askForBackgroundSync();
+    if (!CONNECTED) return;
+    await syncNow(false);
+    if (state.outbox.some(function (t) { return t.id === id; })) toast(offlineMsg, 4500);
   }
 
   /* ---------- Saving a trip ---------- */
@@ -823,78 +1349,143 @@ dialog .lede { margin: 0 0 18px; color: var(--muted); }
     e.preventDefault();
     var river = chosen(el.river, el.riverNew);
     var riverField = el.river.value === NEW ? el.riverNew : el.river;
-    [el.date, el.river, el.riverNew].forEach(function (f) { f.removeAttribute("aria-invalid"); });
-
+    [el.date, el.river, el.riverNew, el.hzType].forEach(function (f) { f.removeAttribute("aria-invalid"); });
     if (!el.date.value) { el.date.setAttribute("aria-invalid", "true"); el.date.focus(); toast("Pick the date of the trip."); return; }
     if (!river) { riverField.setAttribute("aria-invalid", "true"); riverField.focus(); toast("Choose a river, or add a new one."); return; }
+    var hazardOpen = !el.hazardBox.hidden;
+    if (hazardOpen && !el.hzType.value) {
+      el.hzType.setAttribute("aria-invalid", "true"); el.hzType.focus();
+      toast("Choose what the hazard is, or tap Remove."); return;
+    }
 
     var lvl = el.level.value.trim();
-    if (lvl && state.unit && /^-?\d+(?:[.,]\d+)?$/.test(lvl)) lvl += " " + state.unit;
+    if (lvl && state.unit.trip && /^-?\d+(?:[.,]\d+)?$/.test(lvl)) lvl += " " + state.unit.trip;
     var boat = chosen(el.boat, el.boatNew);
-
     var trip = {
-      id: uuid(),
-      date: el.date.value,
-      river: river,
-      section: chosen(el.section, el.sectionNew),
-      level: lvl,
-      boat: boat,
-      notes: el.notes.value.trim(),
-      paddler: state.settings.name || "",
-      createdAt: new Date().toISOString()
+      kind: "trip", id: uuid(), date: el.date.value, river: river, section: chosen(el.section, el.sectionNew),
+      level: lvl, boat: boat, notes: el.notes.value.trim(), visibility: vis("tripVis"), createdAt: new Date().toISOString()
     };
+    if (hazardOpen) trip.hazard = { id: uuid(), type: el.hzType.value, where: el.hzWhere.value.trim(), details: el.hzDetails.value.trim() };
 
     await RB.db.put("outbox", trip);
     state.outbox = await RB.db.all("outbox");
     state.settings.lastBoat = boat;
-    state.settings.unit = state.unit;
+    state.settings.unit = state.unit.trip;
+    state.settings.visibility = trip.visibility;
     await RB.db.put("kv", state.settings, "settings");
 
-    // Keep the date and boat (you'll often log several runs in a day), clear the rest
-    el.river.value = "";
-    el.riverNew.value = ""; el.riverNew.hidden = true; el.riverHint.hidden = true;
-    el.section.value = "";
-    el.sectionNew.value = ""; el.sectionHint.hidden = true;
-    el.level.value = "";
-    el.notes.value = "";
-    el.boat.value = "";
-    el.boatNew.value = "";
+    // Keep the date (you'll often log several runs in a day) and the privacy choice; clear the rest
+    el.river.value = ""; el.riverNew.value = ""; el.riverNew.hidden = true; el.riverHint.hidden = true;
+    el.section.value = ""; el.sectionNew.value = ""; el.sectionHint.hidden = true;
+    el.level.value = ""; el.notes.value = ""; el.boat.value = ""; el.boatNew.value = "";
+    openHazard(false);
     renderAll();
     window.scrollTo({ top: 0, behavior: "smooth" });
+    toast(trip.hazard ? "Trip and hazard saved on this phone." : "Trip saved on this phone.");
+    afterQueue(trip.id, "Trip saved on this phone. It will upload when you have service.");
+  }
 
-    toast("Trip saved on this phone.");
-    askForBackgroundSync();
-    if (CONNECTED) {
-      await syncNow(false);
-      if (state.outbox.some(function (t) { return t.id === trip.id; })) {
-        toast("Trip saved on this phone. It will upload when you have service.", 4500);
-      }
+  /* ---------- Accounts ---------- */
+  function setAuthMode(mode) {
+    state.authMode = mode;
+    var up = mode === "signup";
+    el.modeSignin.setAttribute("aria-pressed", String(!up));
+    el.modeSignup.setAttribute("aria-pressed", String(up));
+    document.querySelectorAll(".signup-only").forEach(function (n) { n.hidden = !up; });
+    $("forgotHelp").hidden = up;
+    el.authSubmit.textContent = up ? "Create account" : "Sign in";
+    el.aPass.autocomplete = up ? "new-password" : "current-password";
+    el.authError.hidden = true;
+  }
+
+  function showAuth(message) {
+    el.appView.hidden = true;
+    el.authView.hidden = false;
+    el.authError.textContent = message || "";
+    el.authError.hidden = !message;
+  }
+
+  function showApp() {
+    el.authView.hidden = true;
+    el.appView.hidden = false;
+  }
+
+  async function needSignIn(message) {
+    var email = state.auth && state.auth.me ? state.auth.me.email : "";
+    state.auth = null;
+    await RB.db.del("kv", "auth");
+    setAuthMode("signin");
+    el.aEmail.value = email;
+    showAuth(message);
+  }
+
+  async function submitAuth(e) {
+    e.preventDefault();
+    if (!CONNECTED) { showAuth("This copy of River Beta isn't connected to a sheet yet. Add the Apps Script URL to config.js."); return; }
+    var up = state.authMode === "signup";
+    var body = {
+      action: up ? "signup" : "signin",
+      email: el.aEmail.value.trim(), password: el.aPass.value,
+      name: el.aName.value.trim(), clubCode: el.aCode.value.trim()
+    };
+    if (!body.email || !body.password || (up && !body.name)) {
+      showAuth(up ? "Enter your name, email and a password." : "Enter your email and password.");
+      return;
+    }
+    el.authSubmit.disabled = true;
+    el.authSubmit.textContent = up ? "Creating account…" : "Signing in…";
+    try {
+      var json = await RB.call(CONFIG.scriptUrl, body, 30000);
+      state.auth = { token: json.token, me: json.me };
+      await RB.db.put("kv", state.auth, "auth");
+      el.aPass.value = "";
+      showApp();
+      renderAll();
+      toast("Signed in as " + json.me.name + ".");
+      syncNow(false);
+    } catch (err) {
+      showAuth(isNetworkError(err) ? "No service right now. Signing in needs a connection the first time." : err.message);
+    } finally {
+      el.authSubmit.disabled = false;
+      el.authSubmit.textContent = up ? "Create account" : "Sign in";
+    }
+  }
+
+  async function signOut() {
+    if (state.outbox.length) {
+      toast(state.outbox.length + (state.outbox.length === 1 ? " entry hasn't" : " entries haven't") + " uploaded yet. Sync with service before signing out.", 5000);
+      return;
+    }
+    if (!window.confirm("Sign out of River Beta on this phone?")) return;
+    el.settings.close();
+    state.data = EMPTY;
+    await RB.db.del("kv", "data");
+    await needSignIn("");
+  }
+
+  async function changePassword(e) {
+    e.preventDefault();
+    if (el.pwNew.value.length < 8) { toast("Use a new password with at least 8 characters."); return; }
+    try {
+      var json = await RB.call(CONFIG.scriptUrl, { action: "changePassword", token: state.auth.token, password: el.pwOld.value, newPassword: el.pwNew.value });
+      state.auth.token = json.token;
+      await RB.db.put("kv", state.auth, "auth");
+      el.pwOld.value = ""; el.pwNew.value = "";
+      el.pwForm.closest("details").open = false;
+      toast("Password changed.");
+    } catch (err) {
+      toast(isNetworkError(err) ? "Changing your password needs service." : err.message, 4500);
     }
   }
 
   /* ---------- Settings ---------- */
-  function openSettings(firstRun) {
-    el.name.value = state.settings.name || "";
-    el.passcode.value = state.settings.passcode || "";
-    el.settingsTitle.textContent = firstRun ? "Welcome to River Beta" : "Settings";
-    el.settingsLede.textContent = firstRun
-      ? "Add your name so your crew knows who logged each trip. You can change it here anytime."
-      : "Your name is added to every trip you log.";
+  function openSettings() {
+    var me = state.auth ? state.auth.me : {};
+    el.whoami.textContent = "Signed in as " + (me.name || "") + (me.email ? " (" + me.email + ")" : "") + ".";
     renderStatus();
     renderInstall();
-    if (el.settings.showModal) el.settings.showModal(); else el.settings.setAttribute("open", "");
+    el.settings.showModal();
   }
-
-  async function saveSettings() {
-    var passChanged = (state.settings.passcode || "") !== el.passcode.value.trim();
-    state.settings.name = el.name.value.trim();
-    state.settings.passcode = el.passcode.value.trim();
-    state.settings.welcomed = true;
-    await RB.db.put("kv", state.settings, "settings");
-    toast("Settings saved.");
-    if (passChanged) syncNow(true);
-  }
-
   function renderInstall() {
     var standalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone;
     var ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
@@ -905,27 +1496,30 @@ dialog .lede { margin: 0 0 18px; color: var(--muted); }
 
   /* ---------- Tabs ---------- */
   function showTab(name) {
-    ["log", "history"].forEach(function (n) {
+    ["log", "flows", "history"].forEach(function (n) {
       $("view-" + n).hidden = n !== name;
       $("tab-" + n).setAttribute("aria-selected", String(n === name));
     });
+    if (name === "flows") renderFlows();
     if (name === "history") renderHistory();
+    state.settings.tab = name;
+    RB.db.put("kv", state.settings, "settings");
     window.scrollTo(0, 0);
   }
 
   /* ---------- Events ---------- */
   function wire() {
-    el.form.addEventListener("submit", saveTrip);
+    el.authForm.addEventListener("submit", submitAuth);
+    el.modeSignin.addEventListener("click", function () { setAuthMode("signin"); });
+    el.modeSignup.addEventListener("click", function () { setAuthMode("signup"); });
 
+    el.tripForm.addEventListener("submit", saveTrip);
     el.river.addEventListener("change", function () {
       toggleNew(el.river, el.riverNew);
       el.riverHint.hidden = true;
       el.section.value = "";
       renderSections();
-      if (el.river.value === NEW) {
-        fillSelect(el.section, [], "No section", "+ Add a new section", "");
-        el.riverNew.focus();
-      }
+      if (el.river.value === NEW) { fillSelect(el.section, [], "No section", "+ Add a new section", ""); el.riverNew.focus(); }
       renderBeta();
     });
     el.riverNew.addEventListener("input", function () {
@@ -934,7 +1528,6 @@ dialog .lede { margin: 0 0 18px; color: var(--muted); }
       });
       renderBeta();
     });
-
     el.section.addEventListener("change", function () {
       toggleNew(el.section, el.sectionNew);
       el.sectionHint.hidden = true;
@@ -942,23 +1535,39 @@ dialog .lede { margin: 0 0 18px; color: var(--muted); }
       renderBeta();
     });
     el.sectionNew.addEventListener("input", function () {
-      var river = chosen(el.river, el.riverNew);
       var existing = lists().sections[el.river.value] || [];
-      if (river) similarCheck(el.sectionNew.value, existing, el.sectionHint, function (name) {
+      if (chosen(el.river, el.riverNew)) similarCheck(el.sectionNew.value, existing, el.sectionHint, function (name) {
         el.section.value = name; toggleNew(el.section, el.sectionNew); renderBeta();
       });
       renderBeta();
     });
-
-    el.boat.addEventListener("change", function () {
-      toggleNew(el.boat, el.boatNew);
-      if (el.boat.value === NEW) el.boatNew.focus();
+    el.boat.addEventListener("change", function () { toggleNew(el.boat, el.boatNew); if (el.boat.value === NEW) el.boatNew.focus(); });
+    document.querySelectorAll(".units").forEach(function (group) {
+      group.querySelectorAll("button").forEach(function (b) {
+        b.addEventListener("click", function () { setUnit(group.dataset.for, b.dataset.unit); });
+      });
     });
+    el.hazardToggle.addEventListener("click", function () { openHazard(true); });
+    el.hazardRemove.addEventListener("click", function () { openHazard(false); el.hazardToggle.focus(); });
 
-    document.querySelectorAll(".units button").forEach(function (b) {
-      b.addEventListener("click", function () { setUnit(b.dataset.unit); });
+    // Flows
+    el.showFav.addEventListener("click", function () { state.flowsMode = "fav"; renderFlows(); });
+    el.showAll.addEventListener("click", function () { state.flowsMode = "all"; renderFlows(); });
+    el.flRiver.addEventListener("change", function () { el.flSection.value = ""; renderFlows(); });
+    el.flSection.addEventListener("change", renderFlows);
+    el.flowClear.addEventListener("click", function () { el.flRiver.value = ""; el.flSection.value = ""; renderFlows(); });
+    el.runList.addEventListener("click", function (e) {
+      var t = e.target.closest("button");
+      if (!t) return;
+      if (t.dataset.fav) toggleFavorite(t.dataset.fav);
+      else if (t.dataset.report) openReport(t.dataset.report);
+      else if (t.dataset.clear) clearHazard(t.dataset.clear);
+      else if (t.dataset.go === "all") { state.flowsMode = "all"; renderFlows(); }
     });
+    el.reportForm.addEventListener("submit", saveReport);
+    el.reportCancel.addEventListener("click", function () { el.reportDlg.close(); });
 
+    // History
     el.search.addEventListener("input", function () { state.shown = 100; renderHistory(); });
     el.fRiver.addEventListener("change", function () { el.fSection.value = ""; state.shown = 100; renderHistory(); });
     el.fSection.addEventListener("change", function () { state.shown = 100; renderHistory(); });
@@ -969,27 +1578,18 @@ dialog .lede { margin: 0 0 18px; color: var(--muted); }
     });
     el.moreBtn.addEventListener("click", function () { state.shown += 100; renderHistory(); });
 
-    $("tab-log").addEventListener("click", function () { showTab("log"); });
-    $("tab-history").addEventListener("click", function () { showTab("history"); });
+    ["log", "flows", "history"].forEach(function (n) { $("tab-" + n).addEventListener("click", function () { showTab(n); }); });
 
     el.statusBtn.addEventListener("click", function () {
       if (!CONNECTED) { toast("Add your Apps Script URL to config.js to connect."); return; }
       syncNow(true);
     });
-    $("settingsBtn").addEventListener("click", function () { openSettings(false); });
-    el.settingsForm.addEventListener("submit", function () { saveSettings(); });
-    el.settings.addEventListener("close", function () {
-      if (state.settings.welcomed) return;
-      state.settings.welcomed = true;
-      RB.db.put("kv", state.settings, "settings");
-    });
+    $("settingsBtn").addEventListener("click", openSettings);
     el.syncBtn.addEventListener("click", function () { syncNow(true); });
+    el.signOutBtn.addEventListener("click", signOut);
+    el.pwForm.addEventListener("submit", changePassword);
 
-    window.addEventListener("beforeinstallprompt", function (e) {
-      e.preventDefault();
-      state.installPrompt = e;
-      renderInstall();
-    });
+    window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); state.installPrompt = e; renderInstall(); });
     el.installBtn.addEventListener("click", function () {
       if (!state.installPrompt) return;
       state.installPrompt.prompt();
@@ -1001,39 +1601,42 @@ dialog .lede { margin: 0 0 18px; color: var(--muted); }
     window.addEventListener("online", function () { syncNow(false); });
     document.addEventListener("visibilitychange", function () { if (!document.hidden) syncNow(false); });
     setInterval(function () { if (!document.hidden && state.outbox.length) syncNow(false); }, 60000);
-    setInterval(renderStatus, 60000);
+    setInterval(function () { renderStatus(); if (!$("view-flows").hidden) renderFlows(); }, 60000);
 
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.addEventListener("message", async function (e) {
-        if (e.data && e.data.type === "synced") {
-          state.outbox = await RB.db.all("outbox");
-          syncNow(false);
-        }
+      navigator.serviceWorker.addEventListener("message", function (e) {
+        if (e.data && e.data.type === "synced") syncNow(false);
       });
     }
   }
 
   /* ---------- Start ---------- */
   async function init() {
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("sw.js").catch(function (err) { console.warn("Service worker:", err); });
-    }
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(function (err) { console.warn("Service worker:", err); });
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {});
 
     $("setupBanner").hidden = CONNECTED;
     if (CONNECTED) await RB.db.put("kv", { scriptUrl: CONFIG.scriptUrl }, "config");
 
     state.settings = (await RB.db.get("kv", "settings")) || {};
-    state.data = (await RB.db.get("kv", "data")) || state.data;
+    state.auth = (await RB.db.get("kv", "auth")) || null;
+    var cached = (await RB.db.get("kv", "data")) || {};
+    state.data = Object.assign({}, EMPTY, cached);
     state.outbox = await RB.db.all("outbox");
+    state.favorites = (await RB.db.get("kv", "favorites")) || [];
     state.lastSync = (await RB.db.get("kv", "lastSync")) || null;
+    state.flowsMode = state.favorites.length ? "fav" : "all";
 
     el.date.value = today();
-    setUnit(state.settings.unit !== undefined ? state.settings.unit : "ft");
+    setUnit("trip", state.settings.unit !== undefined ? state.settings.unit : "ft");
+    setVis("tripVis", state.settings.visibility);
+    setAuthMode("signin");
     wire();
-    renderAll();
 
-    if (!state.settings.welcomed) openSettings(true);
+    if (!state.auth) { showAuth(""); return; }
+    showApp();
+    renderAll();
+    if (state.settings.tab && state.settings.tab !== "log") showTab(state.settings.tab);
     syncNow(false);
   }
 
