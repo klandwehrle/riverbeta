@@ -53,14 +53,37 @@ var RB = (function () {
     catch (e) { throw new Error("The sheet didn't answer. Check the web app is deployed with access set to Anyone."); }
   }
 
-  // Sends every queued trip in one request. Trips the server confirms are removed from the outbox.
+  // All calls to the sheet are POSTs with a text/plain body (avoids the CORS preflight Apps Script can't answer)
+  async function call(scriptUrl, body, ms) {
+    var t = withTimeout(ms || 25000);
+    try {
+      var res = await fetch(scriptUrl, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(body),
+        signal: t.signal
+      });
+      var json = await readJson(res);
+      if (!json.ok) {
+        var err = new Error(json.error || "Something went wrong.");
+        err.auth = !!json.auth;
+        throw err;
+      }
+      return json;
+    } finally {
+      t.done();
+    }
+  }
+
+  // Sends every queued trip, level report and hazard update in one request. Trips the server confirms are removed from the outbox.
   // The server skips trip IDs it already has, so retrying after a dropped connection is safe.
   async function uploadOutbox() {
     var config = (await db.get("kv", "config")) || {};
-    var settings = (await db.get("kv", "settings")) || {};
+    var auth = (await db.get("kv", "auth")) || {};
     var trips = await db.all("outbox");
-    if (!trips.length) return { sent: 0, rejected: [] };
+    if (!trips.length) return { sent: 0, sentReports: 0, rejected: [] };
     if (!config.scriptUrl) throw new Error("App isn't connected to a sheet yet.");
+    if (!auth.token) throw new Error("Sign in to upload.");
 
     var t = withTimeout(25000);
     try {
@@ -68,19 +91,33 @@ var RB = (function () {
         method: "POST",
         // text/plain avoids the CORS preflight that Apps Script can't answer
         headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ action: "addTrips", key: settings.passcode || "", trips: trips }),
+        body: JSON.stringify({
+          action: "sync",
+          token: auth.token,
+          trips: trips.filter(function (t) { return !t.kind || t.kind === "trip"; }),
+          reports: trips.filter(function (t) { return t.kind === "report"; }),
+          clears: trips.filter(function (t) { return t.kind === "clear"; })
+        }),
         signal: t.signal
       });
       var json = await readJson(res);
-      if (!json.ok) throw new Error(json.error || "Upload failed.");
+      if (!json.ok) {
+        var err = new Error(json.error || "Upload failed.");
+        err.auth = !!json.auth;
+        throw err;
+      }
       var done = (json.saved || []).concat((json.rejected || []).map(function (r) { return r.id; }));
       for (var i = 0; i < done.length; i++) await db.del("outbox", done[i]);
       await db.put("kv", new Date().toISOString(), "lastSync");
-      return { sent: (json.saved || []).length, rejected: json.rejected || [] };
+      var savedIds = {};
+      (json.saved || []).forEach(function (id) { savedIds[id] = true; });
+      var sentTrips = trips.filter(function (t) { return savedIds[t.id] && (!t.kind || t.kind === "trip"); }).length;
+      var sentReports = trips.filter(function (t) { return savedIds[t.id] && t.kind === "report"; }).length;
+      return { sent: sentTrips, sentReports: sentReports, rejected: json.rejected || [] };
     } finally {
       t.done();
     }
   }
 
-  return { db: db, uploadOutbox: uploadOutbox, withTimeout: withTimeout, readJson: readJson };
+  return { db: db, uploadOutbox: uploadOutbox, withTimeout: withTimeout, readJson: readJson, call: call };
 })();
