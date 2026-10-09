@@ -183,8 +183,18 @@ input[type="date"] { -webkit-appearance: none; appearance: none; }
 }
 
 /* ---------- History ---------- */
-.search { margin-bottom: 6px; }
-.count { color: var(--muted); font-size: 0.875rem; margin: 0 2px 10px; }
+.filters { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+.filters .field { margin-bottom: 12px; min-width: 0; }
+.filters select, .filters input[type="text"] { min-height: 46px; font-size: 1rem; padding-top: 9px; padding-bottom: 9px; }
+.filters select:disabled { opacity: 0.55; }
+.filters .active select, .filters .active input { border-color: var(--water); box-shadow: inset 0 0 0 1px var(--water); }
+@media (prefers-color-scheme: dark) { .filters .active select, .filters .active input { border-color: var(--foam); box-shadow: inset 0 0 0 1px var(--foam); } }
+.count-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 2px 10px; min-height: 36px; }
+.count { color: var(--muted); font-size: 0.875rem; margin: 0; }
+.clear {
+  background: none; border: 0; padding: 6px 0; cursor: pointer;
+  color: var(--river); font-weight: 600; font-size: 0.9375rem; text-decoration: underline;
+}
 .trips {
   list-style: none; margin: 0; padding: 0;
   background: var(--surface); border-radius: 12px; border: 1.5px solid var(--line); overflow: hidden;
@@ -344,11 +354,28 @@ dialog .lede { margin: 0 0 18px; color: var(--muted); }
 
   <!-- History -->
   <section id="view-history" aria-labelledby="tab-history" hidden>
-    <div class="field search">
-      <label for="search" class="visually-hidden">Search trips</label>
-      <input type="text" id="search" placeholder="Search rivers, sections, boats, notes" autocomplete="off" enterkeyhint="search">
+    <div class="filters">
+      <div class="field">
+        <label for="fRiver">River</label>
+        <div class="select"><select id="fRiver"></select></div>
+      </div>
+      <div class="field">
+        <label for="fSection">Section</label>
+        <div class="select"><select id="fSection"></select></div>
+      </div>
+      <div class="field">
+        <label for="fBoat">Boat</label>
+        <div class="select"><select id="fBoat"></select></div>
+      </div>
+      <div class="field">
+        <label for="search">Notes</label>
+        <input type="text" id="search" placeholder="Words in notes" autocomplete="off" enterkeyhint="search">
+      </div>
     </div>
-    <p class="count" id="tripCount"></p>
+    <div class="count-row">
+      <p class="count" id="tripCount"></p>
+      <button type="button" class="clear" id="clearFilters" hidden>Clear filters</button>
+    </div>
     <ul class="trips" id="tripList"></ul>
     <button type="button" class="secondary more" id="moreBtn" hidden>Show more trips</button>
   </section>
@@ -427,7 +454,8 @@ dialog .lede { margin: 0 0 18px; color: var(--muted); }
     section: $("section"), sectionNew: $("sectionNew"), sectionHint: $("sectionHint"),
     level: $("level"), betaLine: $("betaLine"),
     boat: $("boat"), boatNew: $("boatNew"), notes: $("notes"),
-    search: $("search"), tripList: $("tripList"), tripCount: $("tripCount"), moreBtn: $("moreBtn"),
+    search: $("search"), fRiver: $("fRiver"), fSection: $("fSection"), fBoat: $("fBoat"), clearFilters: $("clearFilters"),
+    tripList: $("tripList"), tripCount: $("tripCount"), moreBtn: $("moreBtn"),
     statusBtn: $("statusBtn"), statusText: $("statusText"),
     settings: $("settings"), settingsForm: $("settingsForm"), name: $("name"), passcode: $("passcode"),
     settingsTitle: $("settingsTitle"), settingsLede: $("settingsLede"),
@@ -449,8 +477,21 @@ dialog .lede { margin: 0 0 18px; color: var(--muted); }
     if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
     return Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
   }
+  // Turns any date the sheet might hold (2024-09-12, 09-12-24, 9/12/2024, full timestamps) into yyyy-mm-dd
+  function dateKey(d) {
+    var s = String(d || "").trim(), m;
+    if (!s) return "";
+    if ((m = /^(\d{4})-(\d{1,2})-(\d{1,2})(?:$|[T ])/.exec(s))) return m[1] + "-" + pad(m[2]) + "-" + pad(m[3]);
+    if ((m = /^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2}|\d{4})$/.exec(s))) {
+      var y = m[3].length === 2 ? (+m[3] > 50 ? "19" : "20") + m[3] : m[3];
+      return y + "-" + pad(m[1]) + "-" + pad(m[2]);
+    }
+    var t = new Date(s);
+    return isNaN(t) ? "" : t.toLocaleDateString("en-CA");
+  }
+  function pad(n) { return ("0" + n).slice(-2); }
   function niceDate(d) {
-    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d || "");
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey(d) || "");
     if (!m) return d || "";
     return new Date(+m[1], +m[2] - 1, +m[3]).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
   }
@@ -529,9 +570,18 @@ dialog .lede { margin: 0 0 18px; color: var(--muted); }
       return Object.assign({ pending: true }, t);
     });
     var synced = state.data.trips.filter(function (t) { return !pendingIds[t.id]; });
-    return pending.concat(synced).sort(function (a, b) {
-      if (a.date !== b.date) return a.date < b.date ? 1 : -1;
-      return (a.createdAt || a.loggedAt || "") < (b.createdAt || b.loggedAt || "") ? 1 : -1;
+    // Newest first. Same-day trips: most recently logged first. Trips with no readable date go last.
+    return pending.concat(synced).map(function (t, i) {
+      return Object.assign({}, t, { sortKey: dateKey(t.date), order: i });
+    }).sort(function (a, b) {
+      if (a.sortKey !== b.sortKey) {
+        if (!a.sortKey) return 1;
+        if (!b.sortKey) return -1;
+        return a.sortKey < b.sortKey ? 1 : -1;
+      }
+      var la = a.createdAt || a.loggedAt || "", lb = b.createdAt || b.loggedAt || "";
+      if (la !== lb) return la < lb ? 1 : -1;
+      return a.order - b.order;
     });
   }
 
@@ -612,23 +662,65 @@ dialog .lede { margin: 0 0 18px; color: var(--muted); }
   }
 
   /* ---------- History ---------- */
+  // Filter choices come from trips actually logged, so every option returns results
+  function uniqueSorted(values) {
+    var seen = {}, out = [];
+    values.forEach(function (v) {
+      var k = lower(v);
+      if (k && !seen[k]) { seen[k] = true; out.push(String(v).trim()); }
+    });
+    return out.sort(byName);
+  }
+
+  function fillFilter(select, items, allLabel) {
+    var keep = select.value;
+    select.innerHTML = '<option value="">' + esc(allLabel) + "</option>" + items.map(function (it) {
+      return '<option value="' + esc(it) + '">' + esc(it) + "</option>";
+    }).join("");
+    var match = items.filter(function (it) { return lower(it) === lower(keep); })[0];
+    select.value = match || "";
+  }
+
+  function renderFilters(trips) {
+    fillFilter(el.fRiver, uniqueSorted(trips.map(function (t) { return t.river; })), "All rivers");
+    var river = lower(el.fRiver.value);
+    var sections = river ? uniqueSorted(trips.filter(function (t) { return lower(t.river) === river; })
+      .map(function (t) { return t.section; })) : [];
+    fillFilter(el.fSection, sections, river ? (sections.length ? "All sections" : "No sections logged") : "Pick a river first");
+    el.fSection.disabled = !river || !sections.length;
+    fillFilter(el.fBoat, uniqueSorted(trips.map(function (t) { return t.boat; })), "All boats");
+  }
+
   function renderHistory() {
-    var q = lower(el.search.value);
-    var trips = allTrips().filter(function (t) {
-      if (!q) return true;
-      return [t.river, t.section, t.boat, t.notes, t.paddler, t.level, niceDate(t.date)].join(" ").toLowerCase().indexOf(q) !== -1;
+    var everything = allTrips();
+    renderFilters(everything);
+
+    var f = { river: lower(el.fRiver.value), section: lower(el.fSection.value), boat: lower(el.fBoat.value), q: lower(el.search.value) };
+    [[el.fRiver, f.river], [el.fSection, f.section], [el.fBoat, f.boat], [el.search, f.q]].forEach(function (pair) {
+      pair[0].closest(".field").classList.toggle("active", !!pair[1]);
+    });
+    var filtering = !!(f.river || f.section || f.boat || f.q);
+    el.clearFilters.hidden = !filtering;
+
+    var trips = everything.filter(function (t) {
+      if (f.river && lower(t.river) !== f.river) return false;
+      if (f.section && lower(t.section) !== f.section) return false;
+      if (f.boat && lower(t.boat) !== f.boat) return false;
+      if (f.q && lower(t.notes).indexOf(f.q) === -1) return false;
+      return true;
     });
 
     if (!trips.length) {
-      el.tripList.innerHTML = '<li class="empty">' + (q
-        ? "No trips match “" + esc(el.search.value.trim()) + "”."
+      el.tripList.innerHTML = '<li class="empty">' + (filtering
+        ? "No trips match these filters."
         : "No trips yet. Log your first one on the Log trip tab.") + "</li>";
       el.tripCount.textContent = "";
       el.moreBtn.hidden = true;
       return;
     }
 
-    el.tripCount.textContent = trips.length + (trips.length === 1 ? " trip" : " trips");
+    el.tripCount.textContent = trips.length + (trips.length === 1 ? " trip" : " trips") +
+      (filtering ? " of " + everything.length : "");
     el.tripList.innerHTML = trips.slice(0, state.shown).map(function (t) {
       var lv = splitLevel(t.level);
       var meta = esc(niceDate(t.date));
@@ -868,6 +960,13 @@ dialog .lede { margin: 0 0 18px; color: var(--muted); }
     });
 
     el.search.addEventListener("input", function () { state.shown = 100; renderHistory(); });
+    el.fRiver.addEventListener("change", function () { el.fSection.value = ""; state.shown = 100; renderHistory(); });
+    el.fSection.addEventListener("change", function () { state.shown = 100; renderHistory(); });
+    el.fBoat.addEventListener("change", function () { state.shown = 100; renderHistory(); });
+    el.clearFilters.addEventListener("click", function () {
+      el.fRiver.value = ""; el.fSection.value = ""; el.fBoat.value = ""; el.search.value = "";
+      state.shown = 100; renderHistory();
+    });
     el.moreBtn.addEventListener("click", function () { state.shown += 100; renderHistory(); });
 
     $("tab-log").addEventListener("click", function () { showTab("log"); });
